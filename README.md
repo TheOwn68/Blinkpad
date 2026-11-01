@@ -25,7 +25,7 @@ sudo apt install build-essential libgtk-3-dev
 ```
 ### Fedora
 ```
-sudo dnf install gcc make gtk3-devel
+sudo dnf install gcc make gtk3-devel pkgconf
 ```
 
 ## Install
@@ -34,6 +34,8 @@ cd blinkpad
 ./install.sh
 ```
 `install.sh` builds, installs to `~/.local/share/blinkpad`, symlinks into `~/.local/bin`, adds a desktop entry, and fixes LED file permissions (may prompt via polkit).
+
+If `blinkpad` is not found after install, ensure `~/.local/bin` is in your PATH (log out/in or add it to your shell profile).
 
 Enable notification daemon:
 ```
@@ -56,3 +58,14 @@ LED sysfs files are root-owned. `install.sh` makes them group-writable for your 
 ## Notes
 - Keyboard backlight usually supports only 0-2 levels.
 - Patterns are software-driven.
+
+## Troubleshooting
+
+**Fedora: permission prompt fails / LEDs still not writable**
+- Run the installer as root: `sudo ./install.sh`
+- Or manually: `sudo blinkpad ensure-permissions`
+- Ensure polkit is installed: `sudo dnf install polkit`
+
+**LEDs not discovered**
+- Ensure `thinkpad_acpi` is loaded: `lsmod | grep thinkpad`
+- Some models need `brightness_enable=1`: `echo 'options thinkpad_acpi brightness_enable=1' | sudo tee /etc/modprobe.d/thinkpad.conf`
