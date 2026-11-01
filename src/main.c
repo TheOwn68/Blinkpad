@@ -57,7 +57,7 @@ static void cmd_trigger(const char *name, const char *trig) {
 int main(int argc, char **argv) {
     discover_leds();
     if (argc < 2) {
-        fprintf(stderr, "usage: thinkpad-lights <command>\n");
+        fprintf(stderr, "usage: blinkpad <command>\n");
         return 1;
     }
     const char *cmd = argv[1];

@@ -23,7 +23,7 @@ jobs:
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
-          name: thinkpad-lights-binaries
+          name: blinkpad-binaries
           path: |
-            thinkpad-lights
-            thinkpad-lights-gui
+            blinkpad
+            blinkpad-gui

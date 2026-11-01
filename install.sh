@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Install ThinkPad Lights (native C) + permissions.
+# Install Blinkpad (native C) + permissions.
 set -euo pipefail
 
-APP_DIR="${HOME}/.local/share/thinkpad-lights"
+APP_DIR="${HOME}/.local/share/blinkpad"
 BIN_DIR="${HOME}/.local/bin"
 APPS_DIR="${HOME}/.local/share/applications"
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,15 +24,15 @@ make clean >/dev/null 2>&1 || true
 make
 
 mkdir -p "$APP_DIR" "$BIN_DIR" "$APPS_DIR"
-install -m 755 "$SRC_DIR/thinkpad-lights" "$SRC_DIR/thinkpad-lights-gui" "$APP_DIR/"
-ln -sf "$APP_DIR/thinkpad-lights" "$BIN_DIR/thinkpad-lights"
-ln -sf "$APP_DIR/thinkpad-lights-gui" "$BIN_DIR/thinkpad-lights-gui"
+install -m 755 "$SRC_DIR/blinkpad" "$SRC_DIR/blinkpad-gui" "$APP_DIR/"
+ln -sf "$APP_DIR/blinkpad" "$BIN_DIR/blinkpad"
+ln -sf "$APP_DIR/blinkpad-gui" "$BIN_DIR/blinkpad-gui"
 
-cat > "$APPS_DIR/thinkpad-lights.desktop" <<EOF
+cat > "$APPS_DIR/blinkpad.desktop" <<EOF
 [Desktop Entry]
-Name=ThinkPad Lights
+Name=Blinkpad
 Comment=Control ThinkPad keyboard and status LEDs
-Exec=$BIN_DIR/thinkpad-lights-gui
+Exec=$BIN_DIR/blinkpad-gui
 Type=Application
 Terminal=false
 Categories=Utility;HardwareSettings;
@@ -49,7 +49,7 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 if have systemctl && have systemd-tmpfiles; then
     echo "Setting up systemd-tmpfiles permissions..."
-    CONF="/tmp/thinkpad-lights-tmpfiles.conf"
+    CONF="/tmp/blinkpad-tmpfiles.conf"
     : > "$CONF"
     for led in /sys/class/leds/tpacpi::* /sys/class/leds/*thinkpad* /sys/class/leds/*kbd_backlight* /sys/class/leds/platform::*; do
         [ -e "$led" ] || continue
@@ -59,18 +59,18 @@ if have systemctl && have systemd-tmpfiles; then
             fi
         done
     done
-    pkexec cp "$CONF" /etc/tmpfiles.d/thinkpad-lights.conf
-    pkexec systemd-tmpfiles --create /etc/tmpfiles.d/thinkpad-lights.conf
+    pkexec cp "$CONF" /etc/tmpfiles.d/blinkpad.conf
+    pkexec systemd-tmpfiles --create /etc/tmpfiles.d/blinkpad.conf
 elif have udevadm; then
     echo "Setting up udev rule permissions..."
-    RULE="/tmp/99-thinkpad-lights.rules"
+    RULE="/tmp/99-blinkpad.rules"
     cat > "$RULE" <<EOF
 SUBSYSTEM=="leds", KERNEL=="tpacpi::*", RUN+="/bin/chgrp $GROUP /sys/class/leds/%k/brightness", RUN+="/bin/chmod g+w /sys/class/leds/%k/brightness"
 SUBSYSTEM=="leds", KERNEL=="tpacpi::*", RUN+="/bin/chgrp $GROUP /sys/class/leds/%k/trigger", RUN+="/bin/chmod g+w /sys/class/leds/%k/trigger"
 SUBSYSTEM=="leds", KERNEL=="platform::*", RUN+="/bin/chgrp $GROUP /sys/class/leds/%k/brightness", RUN+="/bin/chmod g+w /sys/class/leds/%k/brightness"
 SUBSYSTEM=="leds", KERNEL=="platform::*", RUN+="/bin/chgrp $GROUP /sys/class/leds/%k/trigger", RUN+="/bin/chmod g+w /sys/class/leds/%k/trigger"
 EOF
-    pkexec cp "$RULE" /etc/udev/rules.d/99-thinkpad-lights.rules
+    pkexec cp "$RULE" /etc/udev/rules.d/99-blinkpad.rules
     pkexec udevadm control --reload-rules || true
     pkexec udevadm trigger --subsystem-match=leds || true
     for led in /sys/class/leds/tpacpi::* /sys/class/leds/platform::*; do
@@ -96,20 +96,20 @@ fi
 
 if have systemctl; then
     mkdir -p "$HOME/.config/systemd/user"
-    cat > "$HOME/.config/systemd/user/thinkpad-lights-daemon.service" <<EOF
+    cat > "$HOME/.config/systemd/user/blinkpad-daemon.service" <<EOF
 [Unit]
-Description=ThinkPad Lights notification daemon
+Description=Blinkpad notification daemon
 
 [Service]
-ExecStart=$BIN_DIR/thinkpad-lights daemon
+ExecStart=$BIN_DIR/blinkpad daemon
 Restart=on-failure
 
 [Install]
 WantedBy=default.target
 EOF
-    echo "Installed user service: thinkpad-lights-daemon.service"
-    echo "Enable with: systemctl --user enable --now thinkpad-lights-daemon.service"
+    echo "Installed user service: blinkpad-daemon.service"
+    echo "Enable with: systemctl --user enable --now blinkpad-daemon.service"
 fi
 
 echo ""
-echo "Done. Ensure $BIN_DIR is in your PATH. Run: thinkpad-lights list"
+echo "Done. Ensure $BIN_DIR is in your PATH. Run: blinkpad list"

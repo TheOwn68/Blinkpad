@@ -1,7 +1,7 @@
 # Build artifacts
 *.o
-thinkpad-lights
-thinkpad-lights-gui
+blinkpad
+blinkpad-gui
 *.AppImage
 
 # Object files

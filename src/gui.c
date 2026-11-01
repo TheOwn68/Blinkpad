@@ -435,7 +435,7 @@ static GtkWidget *build_settings(void) {
     g_signal_connect(fix, "clicked", G_CALLBACK(fix_perms_cb), NULL);
     gtk_box_pack_start(GTK_BOX(box), fix, FALSE, FALSE, 0);
 
-    gtk_box_pack_start(GTK_BOX(box), gtk_label_new("ThinkPad Lights — native C/GTK3."), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), gtk_label_new("Blinkpad — native C/GTK3."), FALSE, FALSE, 0);
     return box;
 }
 
@@ -459,7 +459,7 @@ int main(int argc, char **argv) {
     discover_leds();
 
     window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(window), "ThinkPad Lights");
+    gtk_window_set_title(GTK_WINDOW(window), "Blinkpad");
     gtk_window_set_default_size(GTK_WINDOW(window), 720, 520);
     g_signal_connect(window, "destroy", G_CALLBACK(on_destroy), NULL);
 
