@@ -45,24 +45,36 @@ static void status_msg(const char *msg) {
     gtk_statusbar_push(GTK_STATUSBAR(statusbar), status_ctx, msg);
 }
 
+static int is_mute_led(int idx) {
+    return (strcmp(leds[idx].friendly, "mute") == 0 || strcmp(leds[idx].friendly, "micmute") == 0);
+}
+
 static void all_off_cb(GtkWidget *w, gpointer d) {
-    int indices[MAX_LEDS];
-    for (int i = 0; i < nleds; i++) indices[i] = i;
-    all_off(indices, nleds);
+    int indices[MAX_LEDS]; int ni = 0;
+    for (int i = 0; i < nleds; i++) {
+        if (is_mute_led(i)) continue;
+        indices[ni++] = i;
+    }
+    all_off(indices, ni);
     for (int i = 0; i < nled_rows; i++) {
+        if (is_mute_led(led_rows[i].idx)) continue;
         gtk_range_set_value(GTK_RANGE(led_rows[i].scale), 0);
         gtk_switch_set_active(GTK_SWITCH(led_rows[i].sw), FALSE);
     }
-    status_msg("All off");
+    status_msg("All off (mute LEDs preserved)");
 }
 
 static void all_max_cb(GtkWidget *w, gpointer d) {
-    for (int i = 0; i < nleds; i++) led_set(i, led_max(i));
+    for (int i = 0; i < nleds; i++) {
+        if (is_mute_led(i)) continue;
+        led_set(i, led_max(i));
+    }
     for (int i = 0; i < nled_rows; i++) {
+        if (is_mute_led(led_rows[i].idx)) continue;
         gtk_range_set_value(GTK_RANGE(led_rows[i].scale), led_max(led_rows[i].idx));
         gtk_switch_set_active(GTK_SWITCH(led_rows[i].sw), TRUE);
     }
-    status_msg("All max");
+    status_msg("All max (mute LEDs preserved)");
 }
 
 static void on_scale_changed(GtkRange *r, gpointer data) {

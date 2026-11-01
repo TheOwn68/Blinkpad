@@ -88,9 +88,12 @@ int main(int argc, char **argv) {
             }
             all_off(indices, ni);
         } else {
-            int indices[MAX_LEDS];
-            for (int i = 0; i < nleds; i++) indices[i] = i;
-            all_off(indices, nleds);
+            int indices[MAX_LEDS]; int ni = 0;
+            for (int i = 0; i < nleds; i++) {
+                if (strcmp(leds[i].friendly, "mute") == 0 || strcmp(leds[i].friendly, "micmute") == 0) continue;
+                indices[ni++] = i;
+            }
+            all_off(indices, ni);
         }
         printf("off\n");
     } else if (strcmp(cmd, "flash") == 0) {
@@ -136,9 +139,12 @@ int main(int argc, char **argv) {
         const char *pname = argv[2];
         char leds_str[1024] = "";
         char allbuf[1024] = "";
+        int first = 1;
         for (int i = 0; i < nleds; i++) {
-            if (i) strcat(allbuf, ",");
+            if (strcmp(leds[i].friendly, "mute") == 0 || strcmp(leds[i].friendly, "micmute") == 0) continue;
+            if (!first) strcat(allbuf, ",");
             strcat(allbuf, leds[i].friendly);
+            first = 0;
         }
         strcpy(leds_str, allbuf);
         double speed = 0, freq = 0, step = 0, level = -1, duty = 0, unit = 0, interval = 0, cycle = 0;

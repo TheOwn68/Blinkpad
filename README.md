@@ -60,6 +60,10 @@ LED sysfs files are root-owned. `install.sh` makes them group-writable for your 
 - Patterns are software-driven.
 - FnLock can be toggled via `blinkpad fnlock on|off` (requires root; may need reboot).
 
+## Mute LED note
+
+The speaker/mic mute LEDs are normally driven by the audio driver (`audio-mute` / `audio-micmute` triggers). Blinkpad avoids touching them in default actions (All Off/All Max/patterns), but if you manually change their trigger or brightness you may desync them from the actual mute state. To restore: set trigger back to `audio-mute` / `audio-micmute` in the Control tab.
+
 ## Troubleshooting
 
 **Fedora: permission prompt fails / LEDs still not writable**
