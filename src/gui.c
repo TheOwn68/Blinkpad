@@ -426,6 +426,15 @@ static void fix_perms_cb(GtkWidget *w, gpointer d) {
     status_msg(msg);
 }
 
+static void fnlock_toggle_cb(GtkWidget *w, gpointer d) {
+    const char *cur = fnlock_status();
+    const char *next = (strcmp(cur, "Enable") == 0) ? "Disable" : "Enable";
+    int rc = fnlock_set(next);
+    char msg[128];
+    snprintf(msg, sizeof(msg), "FnLock -> %s%s", next, rc == 0 ? "" : " (failed)");
+    status_msg(msg);
+}
+
 static GtkWidget *build_settings(void) {
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
     gtk_widget_set_margin_start(box, 12); gtk_widget_set_margin_end(box, 12);
@@ -436,6 +445,18 @@ static GtkWidget *build_settings(void) {
     gtk_box_pack_start(GTK_BOX(box), fix, FALSE, FALSE, 0);
 
     gtk_box_pack_start(GTK_BOX(box), gtk_label_new("Blinkpad — native C/GTK3."), FALSE, FALSE, 0);
+
+    /* FnLock */
+    if (fnlock_available()) {
+        GtkWidget *fnbtn = gtk_button_new_with_label("Toggle Fn Lock");
+        g_signal_connect(fnbtn, "clicked", G_CALLBACK(fnlock_toggle_cb), NULL);
+        gtk_box_pack_start(GTK_BOX(box), fnbtn, FALSE, FALSE, 0);
+        GtkWidget *fnstatus = gtk_label_new(NULL);
+        char buf[128];
+        snprintf(buf, sizeof(buf), "FnLock: %s (may need reboot)", fnlock_status());
+        gtk_label_set_text(GTK_LABEL(fnstatus), buf);
+        gtk_box_pack_start(GTK_BOX(box), fnstatus, FALSE, FALSE, 0);
+    }
     return box;
 }
 

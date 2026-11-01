@@ -236,6 +236,17 @@ int main(int argc, char **argv) {
         g_main_loop_run(loop);
         g_main_loop_unref(loop);
         printf("daemon stopped\n");
+    } else if (strcmp(cmd, "fnlock") == 0) {
+        if (argc >= 3 && (strcmp(argv[2], "on") == 0 || strcmp(argv[2], "enable") == 0)) {
+            int rc = fnlock_set("Enable");
+            printf("FnLock: %s\n", rc == 0 ? "Enable (F-keys primary)" : "failed");
+        } else if (argc >= 3 && (strcmp(argv[2], "off") == 0 || strcmp(argv[2], "disable") == 0)) {
+            int rc = fnlock_set("Disable");
+            printf("FnLock: %s\n", rc == 0 ? "Disable (media keys primary)" : "failed");
+        } else {
+            if (!fnlock_available()) { printf("FnLock not available on this machine.\n"); return 1; }
+            printf("FnLock: %s\n", fnlock_status());
+        }
     } else {
         fprintf(stderr, "unknown command %s\n", cmd);
         return 1;

@@ -4,6 +4,45 @@
 Led leds[MAX_LEDS];
 int nleds = 0;
 
+static const char *FNLOCK_PATH = "/sys/devices/virtual/firmware-attributes/thinklmi/attributes/FnKeyAsPrimary/current_value";
+
+int fnlock_available(void) {
+    // check existence (as root via pkexec? just stat)
+    struct stat st;
+    if (stat(FNLOCK_PATH, &st) == 0) return 1;
+    return 0;
+}
+
+static char fnlock_buf[64];
+const char *fnlock_status(void) {
+    fnlock_buf[0] = '\0';
+    char cmd[256];
+    if (geteuid() == 0) {
+        snprintf(cmd, sizeof(cmd), "cat %s", FNLOCK_PATH);
+    } else {
+        snprintf(cmd, sizeof(cmd), "pkexec cat %s", FNLOCK_PATH);
+    }
+    FILE *p = popen(cmd, "r");
+    if (!p) return fnlock_buf;
+    if (fgets(fnlock_buf, sizeof(fnlock_buf), p)) {
+        fnlock_buf[strcspn(fnlock_buf, "\n")] = '\0';
+    }
+    pclose(p);
+    return fnlock_buf;
+}
+
+int fnlock_set(const char *value) {
+    if (strcmp(value, "Enable") != 0 && strcmp(value, "Disable") != 0) return -1;
+    char cmd[512];
+    if (geteuid() == 0) {
+        snprintf(cmd, sizeof(cmd), "sh -c 'echo %s > %s'", value, FNLOCK_PATH);
+    } else {
+        snprintf(cmd, sizeof(cmd), "pkexec sh -c 'echo %s > %s'", value, FNLOCK_PATH);
+    }
+    int rc = system(cmd);
+    return (rc == 0) ? 0 : -1;
+}
+
 /* daemon globals (defined here, shared) */
 int daemon_indices[64];
 int daemon_nleds = 0;
