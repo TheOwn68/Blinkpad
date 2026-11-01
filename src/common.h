@@ -38,6 +38,8 @@ void restore_leds(int *indices, int n, int *vals);
 int ensure_permissions(void);
 int find_led_by_name(const char *name);
 const char *led_display_name(int idx);
+int hide_led(const char *name);
+int show_led(const char *name);
 
 /* FnLock (firmware attribute) */
 int fnlock_available(void);

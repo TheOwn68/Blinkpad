@@ -242,6 +242,32 @@ int main(int argc, char **argv) {
         g_main_loop_run(loop);
         g_main_loop_unref(loop);
         printf("daemon stopped\n");
+    } else if (strcmp(cmd, "hide") == 0) {
+        if (argc < 3) { fprintf(stderr, "hide <led>\n"); return 1; }
+        if (hide_led(argv[2]) == 0) printf("Hidden %s (restart app to apply)\n", argv[2]);
+        else printf("Failed\n");
+    } else if (strcmp(cmd, "show") == 0) {
+        if (argc < 3) { fprintf(stderr, "show <led>\n"); return 1; }
+        if (show_led(argv[2]) == 0) printf("Unhidden %s (restart app to apply)\n", argv[2]);
+        else printf("Failed\n");
+    } else if (strcmp(cmd, "hidden") == 0) {
+        // print hidden list
+        const char *home = getenv("HOME");
+        char path[512];
+        snprintf(path, sizeof(path), "%s/.config/blinkpad/hidden", home ? home : "/tmp");
+        FILE *f = fopen(path, "r");
+        if (!f) { printf("No hidden LEDs.\n"); }
+        else {
+            char line[128];
+            int any = 0;
+            while (fgets(line, sizeof(line), f)) {
+                line[strcspn(line, "\n")] = '\0';
+                printf("%s\n", line);
+                any = 1;
+            }
+            if (!any) printf("No hidden LEDs.\n");
+            fclose(f);
+        }
     } else if (strcmp(cmd, "fnlock") == 0) {
         if (argc >= 3 && (strcmp(argv[2], "on") == 0 || strcmp(argv[2], "enable") == 0)) {
             int rc = fnlock_set("Enable");

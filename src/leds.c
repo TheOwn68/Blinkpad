@@ -119,6 +119,87 @@ static void friendly_name(const char *kernel, char *out) {
     out[j] = '\0';
 }
 
+static int name_is_hidden(const char *friendly) {
+    char product[256] = "";
+    const char *files[] = {"/sys/class/dmi/id/product_name", "/sys/class/dmi/id/product_family", "/sys/class/dmi/id/product_version"};
+    for (int i = 0; i < 3; i++) {
+        FILE *pf = fopen(files[i], "r");
+        if (pf) {
+            char buf[128];
+            if (fgets(buf, sizeof(buf), pf)) {
+                strcat(product, buf);
+                strcat(product, " ");
+            }
+            fclose(pf);
+        }
+    }
+    if (strstr(product, "T490") && strcmp(friendly, "thinkvantage") == 0) return 1;
+
+    const char *home = getenv("HOME");
+    if (!home) home = "/tmp";
+    char path[512];
+    snprintf(path, sizeof(path), "%s/.config/blinkpad/hidden", home);
+    FILE *f = fopen(path, "r");
+    if (f) {
+        char line[128];
+        while (fgets(line, sizeof(line), f)) {
+            line[strcspn(line, "\n")] = '\0';
+            if (strcmp(line, friendly) == 0) { fclose(f); return 1; }
+        }
+        fclose(f);
+    }
+    return 0;
+}
+
+int hide_led(const char *friendly) {
+    const char *home = getenv("HOME");
+    if (!home) home = "/tmp";
+    char dir[512], path[512];
+    snprintf(dir, sizeof(dir), "%s/.config/blinkpad", home);
+    mkdir(dir, 0755);
+    snprintf(path, sizeof(path), "%s/hidden", dir);
+    // append if not already
+    FILE *f = fopen(path, "r");
+    int exists = 0;
+    if (f) {
+        char line[128];
+        while (fgets(line, sizeof(line), f)) {
+            line[strcspn(line, "\n")] = '\0';
+            if (strcmp(line, friendly) == 0) { exists = 1; break; }
+        }
+        fclose(f);
+    }
+    if (exists) return 0;
+    f = fopen(path, "a");
+    if (!f) return -1;
+    fprintf(f, "%s\n", friendly);
+    fclose(f);
+    return 0;
+}
+
+int show_led(const char *friendly) {
+    const char *home = getenv("HOME");
+    if (!home) home = "/tmp";
+    char path[512];
+    snprintf(path, sizeof(path), "%s/.config/blinkpad/hidden", home);
+    FILE *f = fopen(path, "r");
+    if (!f) return 0;
+    // read all, rewrite without target
+    char lines[64][128]; int n = 0;
+    char line[128];
+    while (fgets(line, sizeof(line), f) && n < 64) {
+        line[strcspn(line, "\n")] = '\0';
+        if (strcmp(line, friendly) == 0) continue;
+        strcpy(lines[n++], line);
+    }
+    fclose(f);
+    f = fopen(path, "w");
+    if (!f) return -1;
+    for (int i = 0; i < n; i++) fprintf(f, "%s\n", lines[i]);
+    fclose(f);
+    return 0;
+}
+
 void discover_leds(void) {
     nleds = 0;
     DIR *d = opendir("/sys/class/leds");
@@ -155,6 +236,7 @@ void discover_leds(void) {
             snprintf(tmp, sizeof(tmp), "%s%d", fn, 2);
             strcpy(fn, tmp);
         }
+        if (name_is_hidden(fn)) continue;
         strncpy(leds[nleds].friendly, fn, NAME_LEN - 1);
         leds[nleds].friendly[NAME_LEN - 1] = '\0';
         strncpy(leds[nleds].kernel, names[i], KERN_LEN - 1);
