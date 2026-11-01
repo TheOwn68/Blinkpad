@@ -1,0 +1,29 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgtk-3-dev pkg-config
+
+      - name: Build
+        run: make
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: thinkpad-lights-binaries
+          path: |
+            thinkpad-lights
+            thinkpad-lights-gui

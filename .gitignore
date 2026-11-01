@@ -1,0 +1,18 @@
+# Build artifacts
+*.o
+thinkpad-lights
+thinkpad-lights-gui
+*.AppImage
+
+# Object files
+*.o
+*.so
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
