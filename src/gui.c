@@ -470,6 +470,13 @@ static void on_destroy(GtkWidget *w, gpointer d) {
 int main(int argc, char **argv) {
     gtk_init(&argc, &argv);
     discover_leds();
+    for (int i = 0; i < nleds; i++) {
+        if (strcmp(leds[i].friendly, "mute") == 0) {
+            if (strcmp(led_trigger(i), "none") == 0) led_set_trigger(i, "audio-mute");
+        } else if (strcmp(leds[i].friendly, "micmute") == 0) {
+            if (strcmp(led_trigger(i), "none") == 0) led_set_trigger(i, "audio-micmute");
+        }
+    }
 
     window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "Blinkpad");

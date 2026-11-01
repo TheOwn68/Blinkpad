@@ -56,6 +56,14 @@ static void cmd_trigger(const char *name, const char *trig) {
 
 int main(int argc, char **argv) {
     discover_leds();
+    /* restore mute LED triggers if they were reset to none */
+    for (int i = 0; i < nleds; i++) {
+        if (strcmp(leds[i].friendly, "mute") == 0) {
+            if (strcmp(led_trigger(i), "none") == 0) led_set_trigger(i, "audio-mute");
+        } else if (strcmp(leds[i].friendly, "micmute") == 0) {
+            if (strcmp(led_trigger(i), "none") == 0) led_set_trigger(i, "audio-micmute");
+        }
+    }
     if (argc == 2 && strcmp(argv[1], "--version") == 0) {
         printf("Blinkpad 1.1.0\n");
         return 0;
