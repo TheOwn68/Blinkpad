@@ -1,4 +1,4 @@
-# Blinkpad (native C)
+# Blinkpad
 
 Control ThinkPad keyboard backlight and status LEDs (power, standby, ThinkVantage, lid logo dot)
 from Linux, with software patterns and a notification flash.
