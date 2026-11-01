@@ -1,4 +1,4 @@
-# Blinkpad (native C)
+# Blinkpad v1.1.0 (native C)
 
 Control ThinkPad keyboard backlight and status LEDs (power, standby, ThinkVantage, lid logo dot)
 from Linux, with software patterns and a notification flash.
@@ -58,7 +58,6 @@ LED sysfs files are root-owned. `install.sh` makes them group-writable for your 
 ## Notes
 - Keyboard backlight usually supports only 0-2 levels.
 - Patterns are software-driven.
-- FnLock can be toggled via `blinkpad fnlock on|off` (requires root; may need reboot).
 
 ## Mute LED note
 

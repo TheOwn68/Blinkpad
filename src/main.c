@@ -56,6 +56,10 @@ static void cmd_trigger(const char *name, const char *trig) {
 
 int main(int argc, char **argv) {
     discover_leds();
+    if (argc == 2 && strcmp(argv[1], "--version") == 0) {
+        printf("Blinkpad 1.1.0\n");
+        return 0;
+    }
     if (argc < 2) {
         fprintf(stderr, "usage: blinkpad <command>\n");
         return 1;
@@ -267,17 +271,6 @@ int main(int argc, char **argv) {
             }
             if (!any) printf("No hidden LEDs.\n");
             fclose(f);
-        }
-    } else if (strcmp(cmd, "fnlock") == 0) {
-        if (argc >= 3 && (strcmp(argv[2], "on") == 0 || strcmp(argv[2], "enable") == 0)) {
-            int rc = fnlock_set("Enable");
-            printf("FnLock: %s\n", rc == 0 ? "Enable (F-keys primary)" : "failed");
-        } else if (argc >= 3 && (strcmp(argv[2], "off") == 0 || strcmp(argv[2], "disable") == 0)) {
-            int rc = fnlock_set("Disable");
-            printf("FnLock: %s\n", rc == 0 ? "Disable (media keys primary)" : "failed");
-        } else {
-            if (!fnlock_available()) { printf("FnLock not available on this machine.\n"); return 1; }
-            printf("FnLock: %s\n", fnlock_status());
         }
     } else {
         fprintf(stderr, "unknown command %s\n", cmd);

@@ -41,11 +41,6 @@ const char *led_display_name(int idx);
 int hide_led(const char *name);
 int show_led(const char *name);
 
-/* FnLock (firmware attribute) */
-int fnlock_available(void);
-const char *fnlock_status(void);
-int fnlock_set(const char *value); /* "Enable" or "Disable" */
-
 extern int daemon_indices[64];
 extern int daemon_nleds;
 extern int daemon_count;
