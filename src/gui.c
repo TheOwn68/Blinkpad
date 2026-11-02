@@ -245,7 +245,7 @@ static GtkWidget *build_patterns(void) {
     GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
     gtk_box_pack_start(GTK_BOX(row), gtk_label_new("Pattern:"), FALSE, FALSE, 0);
     pat_combo = gtk_combo_box_text_new();
-    const char *pats[] = {"off","solid","blink","strobe","pulse","heartbeat","chase","cylon","wave","sos","rainbow","notification"};
+    const char *pats[] = {"off","solid","blink","strobe","pulse","heartbeat","chase","cylon","wave","sos","notification"};
     for (int i = 0; i < 12; i++) gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(pat_combo), pats[i]);
     gtk_combo_box_set_active(GTK_COMBO_BOX(pat_combo), 1);
     gtk_box_pack_start(GTK_BOX(row), pat_combo, FALSE, FALSE, 0);
@@ -535,7 +535,7 @@ static void load_selections(void) {
                 // patterns list
             }
             // find index
-            const char *pats[] = {"off","solid","blink","strobe","pulse","heartbeat","chase","cylon","wave","sos","rainbow","notification"};
+            const char *pats[] = {"off","solid","blink","strobe","pulse","heartbeat","chase","cylon","wave","sos","notification"};
             for (int i = 0; i < 12; i++) {
                 if (strcmp(pats[i], val) == 0) { gtk_combo_box_set_active(GTK_COMBO_BOX(pat_combo), i); break; }
             }

@@ -98,12 +98,6 @@ static void *pattern_thread(void *arg) {
                 int phase = (fmod(t, interval * 2) < interval) ? 1 : 0;
                 for (int i = 0; i < e->n; i++) vals[i] = phase ? maxes[i] : 0;
             }
-        } else if (strcmp(e->pattern, "rainbow") == 0) {
-            double freq = e->freq <= 0 ? 0.6 : e->freq;
-            for (int i = 0; i < e->n; i++) {
-                double v = (sin(2 * M_PI * (freq * t + i * 0.3)) + 1) / 2.0;
-                vals[i] = (int)(maxes[i] * v);
-            }
         }
 
         for (int i = 0; i < e->n; i++) {
