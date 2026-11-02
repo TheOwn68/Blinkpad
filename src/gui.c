@@ -7,6 +7,8 @@
 static GtkWidget *window;
 static PatternEngine *current_engine = NULL;
 static gboolean poll_engine(gpointer data);
+static void save_selections(void);
+static void load_selections(void);
 static GtkWidget *statusbar;
 static guint status_ctx;
 
@@ -200,6 +202,7 @@ static void start_pattern_cb(GtkWidget *w, gpointer d) {
     snprintf(msg, sizeof(msg), "Running: %s", pname);
     gtk_label_set_text(GTK_LABEL(pat_status), msg);
     g_free(pname);
+    save_selections();
     g_timeout_add(200, poll_engine, NULL);
 
     /* poll */
@@ -227,12 +230,10 @@ static void stop_pattern_cb(GtkWidget *w, gpointer d) {
     }
 }
 
-static void fast_flash_cb(GtkWidget *w, gpointer d) {
-    /* set strobe + high freq, then start */
-    gtk_combo_box_set_active(GTK_COMBO_BOX(pat_combo), 3); /* strobe is index 3? patterns list: off0 solid1 blink2 strobe3 */
-    /* find freq spinner index (param_keys[1]) */
-    gtk_spin_button_set_value(GTK_SPIN_BUTTON(param_spin[1]), 12.0);
-    start_pattern_cb(NULL, NULL);
+static void select_all_cb(GtkWidget *w, gpointer d) {
+    for (int i = 0; i < nleds; i++) {
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(led_check[i]), TRUE);
+    }
 }
 
 static GtkWidget *build_patterns(void) {
@@ -292,9 +293,9 @@ static GtkWidget *build_patterns(void) {
     GtkWidget *stop = gtk_button_new_with_label("Stop");
     g_signal_connect(stop, "clicked", G_CALLBACK(stop_pattern_cb), NULL);
     gtk_box_pack_start(GTK_BOX(btnbox), stop, FALSE, FALSE, 0);
-    GtkWidget *fast = gtk_button_new_with_label("Fast Flash");
-    g_signal_connect(fast, "clicked", G_CALLBACK(fast_flash_cb), NULL);
-    gtk_box_pack_start(GTK_BOX(btnbox), fast, FALSE, FALSE, 0);
+    GtkWidget *allbtn = gtk_button_new_with_label("All");
+    g_signal_connect(allbtn, "clicked", G_CALLBACK(select_all_cb), NULL);
+    gtk_box_pack_start(GTK_BOX(btnbox), allbtn, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(box), btnbox, FALSE, FALSE, 0);
 
     pat_status = gtk_label_new("Idle");
@@ -385,6 +386,7 @@ static void toggle_daemon_cb(GtkWidget *w, gpointer d) {
 
     /* start thread */
     pthread_create(&daemon_thread, NULL, gui_daemon_thread, NULL);
+    save_selections();
 }
 
 static GtkWidget *build_notify(void) {
@@ -459,12 +461,99 @@ static void on_destroy(GtkWidget *w, gpointer d) {
         free(current_engine);
         current_engine = NULL;
     }
+    save_selections();
     daemon_stop = 1;
     if (daemon_thread_active) {
         pthread_join(daemon_thread, NULL);
         daemon_thread_active = 0;
     }
     gtk_main_quit();
+}
+
+static void save_selections(void) {
+    const char *home = getenv("HOME");
+    if (!home) home = "/tmp";
+    char dir[512], path[512];
+    snprintf(dir, sizeof(dir), "%s/.config/blinkpad", home);
+    mkdir(dir, 0755);
+    snprintf(path, sizeof(path), "%s/ui.conf", dir);
+    FILE *f = fopen(path, "w");
+    if (!f) return;
+    // pattern leds
+    fprintf(f, "pattern_leds=");
+    int first = 1;
+    for (int i = 0; i < nleds; i++) {
+        if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(led_check[i]))) {
+            if (!first) fputc(',', f);
+            fputs(leds[i].friendly, f);
+            first = 0;
+        }
+    }
+    fprintf(f, "\n");
+    // pattern name
+    gchar *pname = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(pat_combo));
+    fprintf(f, "pattern=%s\n", pname ? pname : "solid");
+    g_free(pname);
+    // notify leds
+    fprintf(f, "notify_leds=");
+    first = 1;
+    for (int i = 0; i < nleds; i++) {
+        if (notify_checks[i] && gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(notify_checks[i]))) {
+            if (!first) fputc(',', f);
+            fputs(leds[i].friendly, f);
+            first = 0;
+        }
+    }
+    fprintf(f, "\n");
+    fclose(f);
+}
+
+static void load_selections(void) {
+    const char *home = getenv("HOME");
+    if (!home) home = "/tmp";
+    char path[512];
+    snprintf(path, sizeof(path), "%s/.config/blinkpad/ui.conf", home);
+    FILE *f = fopen(path, "r");
+    if (!f) return;
+    char line[1024];
+    while (fgets(line, sizeof(line), f)) {
+        line[strcspn(line, "\n")] = '\0';
+        if (strncmp(line, "pattern_leds=", 13) == 0) {
+            char *val = line + 13;
+            // default all off first
+            for (int i = 0; i < nleds; i++) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(led_check[i]), FALSE);
+            char buf[1024]; strcpy(buf, val);
+            char *tok = strtok(buf, ",");
+            while (tok) {
+                int idx = find_led_by_name(tok);
+                if (idx >= 0 && idx < nleds) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(led_check[idx]), TRUE);
+                tok = strtok(NULL, ",");
+            }
+        } else if (strncmp(line, "pattern=", 8) == 0) {
+            char *val = line + 8;
+            for (int i = 0; i < 12; i++) {
+                // patterns list
+            }
+            // find index
+            const char *pats[] = {"off","solid","blink","strobe","pulse","heartbeat","chase","cylon","wave","sos","rainbow","notification"};
+            for (int i = 0; i < 12; i++) {
+                if (strcmp(pats[i], val) == 0) { gtk_combo_box_set_active(GTK_COMBO_BOX(pat_combo), i); break; }
+            }
+        } else if (strncmp(line, "notify_leds=", 12) == 0) {
+            char *val = line + 12;
+            for (int i = 0; i < nleds; i++) {
+                if (notify_checks[i]) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(notify_checks[i]), FALSE);
+            }
+            char buf[1024]; strcpy(buf, val);
+            char *tok = strtok(buf, ",");
+            while (tok) {
+                int idx = find_led_by_name(tok);
+                if (idx >= 0 && idx < nleds && notify_checks[idx]) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(notify_checks[idx]), TRUE);
+                tok = strtok(NULL, ",");
+            }
+        }
+    }
+    fclose(f);
 }
 
 int main(int argc, char **argv) {
@@ -500,6 +589,7 @@ int main(int argc, char **argv) {
     status_ctx = gtk_statusbar_get_context_id(GTK_STATUSBAR(statusbar), "main");
     gtk_box_pack_start(GTK_BOX(vbox), statusbar, FALSE, FALSE, 0);
 
+    load_selections();
     gtk_widget_show_all(window);
     gtk_main();
     return 0;

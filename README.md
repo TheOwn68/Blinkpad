@@ -1,5 +1,7 @@
 # Blinkpad v1.1.0 (native C)
 
+For colorless (monochrome) ThinkPad LEDs.
+
 Control ThinkPad keyboard backlight and status LEDs (power, standby, ThinkVantage, lid logo dot)
 from Linux, with software patterns and a notification flash.
 
