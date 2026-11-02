@@ -246,7 +246,7 @@ static GtkWidget *build_patterns(void) {
     gtk_box_pack_start(GTK_BOX(row), gtk_label_new("Pattern:"), FALSE, FALSE, 0);
     pat_combo = gtk_combo_box_text_new();
     const char *pats[] = {"off","solid","blink","strobe","pulse","heartbeat","chase","cylon","wave","sos","notification"};
-    for (int i = 0; i < 12; i++) gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(pat_combo), pats[i]);
+    for (int i = 0; i < 11; i++) gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(pat_combo), pats[i]);
     gtk_combo_box_set_active(GTK_COMBO_BOX(pat_combo), 1);
     gtk_box_pack_start(GTK_BOX(row), pat_combo, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(box), row, FALSE, FALSE, 0);
@@ -531,12 +531,8 @@ static void load_selections(void) {
             }
         } else if (strncmp(line, "pattern=", 8) == 0) {
             char *val = line + 8;
-            for (int i = 0; i < 12; i++) {
-                // patterns list
-            }
-            // find index
             const char *pats[] = {"off","solid","blink","strobe","pulse","heartbeat","chase","cylon","wave","sos","notification"};
-            for (int i = 0; i < 12; i++) {
+            for (int i = 0; i < 11; i++) {
                 if (strcmp(pats[i], val) == 0) { gtk_combo_box_set_active(GTK_COMBO_BOX(pat_combo), i); break; }
             }
         } else if (strncmp(line, "notify_leds=", 12) == 0) {
