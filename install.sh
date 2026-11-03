@@ -135,5 +135,18 @@ EOF
     echo "Enable with: systemctl --user enable --now blinkpad-daemon.service"
 fi
 
+# Sleep hook: restore keyboard backlight to manual control after wake
+HOOK="/etc/systemd/system-sleep/blinkpad-kbd.sh"
+TMPHOOK="/tmp/blinkpad-kbd.sh"
+cat > "$TMPHOOK" <<'HOOKEOF'
+#!/bin/sh
+if [ "$1" = "post" ]; then
+    echo none > /sys/class/leds/tpacpi::kbd_backlight/trigger 2>/dev/null
+    echo 0 > /sys/class/leds/tpacpi::kbd_backlight/brightness 2>/dev/null
+fi
+HOOKEOF
+run_root cp "$TMPHOOK" "$HOOK"
+run_root chmod +x "$HOOK"
+
 echo ""
 echo "Done. Ensure $BIN_DIR is in your PATH. Run: blinkpad list"
