@@ -75,7 +75,7 @@ if have systemctl && have systemd-tmpfiles; then
     echo "Setting up systemd-tmpfiles permissions..."
     CONF="/tmp/blinkpad-tmpfiles.conf"
     : > "$CONF"
-    for led in /sys/class/leds/tpacpi::* /sys/class/leds/*thinkpad* /sys/class/leds/*kbd_backlight* /sys/class/leds/platform::*; do
+    for led in $(ls -d /sys/class/leds/tpacpi::* /sys/class/leds/platform::* 2>/dev/null | sort -u); do
         [ -e "$led" ] || continue
         for attr in brightness trigger; do
             if [ -e "$led/$attr" ]; then
