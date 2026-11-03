@@ -1,5 +1,6 @@
 #include "common.h"
 #include <ctype.h>
+#include <gio/gio.h>
 
 Led leds[MAX_LEDS];
 int nleds = 0;
@@ -221,8 +222,55 @@ int led_max(int idx) {
     return v;
 }
 
+static GDBusConnection *upower_sysbus = NULL;
+
+static int upower_kbd_available(void) {
+    if (!upower_sysbus) upower_sysbus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, NULL);
+    if (!upower_sysbus) return 0;
+    GError *err = NULL;
+    GVariant *res = g_dbus_connection_call_sync(upower_sysbus,
+        "org.freedesktop.UPower", "/org/freedesktop/UPower/KbdBacklight",
+        "org.freedesktop.UPower.KbdBacklight", "GetMaxBrightness",
+        NULL, NULL, G_DBUS_CALL_FLAGS_NONE, 2000, NULL, &err);
+    if (!res) { if (err) g_error_free(err); return 0; }
+    g_variant_unref(res);
+    return 1;
+}
+
+static int upower_kbd_get(void) {
+    if (!upower_sysbus) upower_sysbus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, NULL);
+    if (!upower_sysbus) return -1;
+    GError *err = NULL;
+    GVariant *res = g_dbus_connection_call_sync(upower_sysbus,
+        "org.freedesktop.UPower", "/org/freedesktop/UPower/KbdBacklight",
+        "org.freedesktop.UPower.KbdBacklight", "GetBrightness",
+        NULL, NULL, G_DBUS_CALL_FLAGS_NONE, 2000, NULL, &err);
+    if (!res) { if (err) g_error_free(err); return -1; }
+    int v = 0;
+    g_variant_get(res, "(i)", &v);
+    g_variant_unref(res);
+    return v;
+}
+
+static int upower_kbd_set(int val) {
+    if (!upower_sysbus) upower_sysbus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, NULL);
+    if (!upower_sysbus) return -1;
+    GError *err = NULL;
+    GVariant *res = g_dbus_connection_call_sync(upower_sysbus,
+        "org.freedesktop.UPower", "/org/freedesktop/UPower/KbdBacklight",
+        "org.freedesktop.UPower.KbdBacklight", "SetBrightness",
+        g_variant_new("(i)", val), NULL, G_DBUS_CALL_FLAGS_NONE, 2000, NULL, &err);
+    if (!res) { if (err) g_error_free(err); return -1; }
+    g_variant_unref(res);
+    return 0;
+}
+
 int led_get(int idx) {
     if (idx < 0 || idx >= nleds) return 0;
+    if (strcmp(leds[idx].friendly, "kbd_backlight") == 0 && upower_kbd_available()) {
+        int v = upower_kbd_get();
+        if (v >= 0) return v;
+    }
     FILE *f = fopen(led_path(leds[idx].kernel, "brightness"), "r");
     if (!f) return 0;
     int v = 0; fscanf(f, "%d", &v); fclose(f);
@@ -234,6 +282,9 @@ int led_set(int idx, int val) {
     int m = led_max(idx);
     if (val < 0) val = 0;
     if (val > m) val = m;
+    if (strcmp(leds[idx].friendly, "kbd_backlight") == 0 && upower_kbd_available()) {
+        if (upower_kbd_set(val) == 0) return val;
+    }
     FILE *f = fopen(led_path(leds[idx].kernel, "brightness"), "w");
     if (!f) return -1;
     fprintf(f, "%d", val);
