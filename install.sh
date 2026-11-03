@@ -136,7 +136,10 @@ EOF
 fi
 
 # Sleep hook: restore keyboard backlight to manual control after wake
-HOOK="/etc/systemd/system-sleep/blinkpad-kbd.sh"
+HOOK_DIR="/etc/systemd/system-sleep"
+[ -d "$HOOK_DIR" ] || HOOK_DIR="/usr/lib/systemd/system-sleep"
+run_root mkdir -p "$HOOK_DIR" 2>/dev/null || true
+HOOK="$HOOK_DIR/blinkpad-kbd.sh"
 TMPHOOK="/tmp/blinkpad-kbd.sh"
 cat > "$TMPHOOK" <<'HOOKEOF'
 #!/bin/sh

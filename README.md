@@ -1,4 +1,4 @@
-# Blinkpad v1.2.0 (native C)
+# Blinkpad v1.2.1 (native C)
 
 For colorless (monochrome) ThinkPad LEDs.
 
