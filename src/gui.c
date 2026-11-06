@@ -566,6 +566,11 @@ int main(int argc, char **argv) {
     window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "Blinkpad");
     gtk_window_set_default_size(GTK_WINDOW(window), 820, 600);
+    GtkWidget *header = gtk_header_bar_new();
+    gtk_header_bar_set_title(GTK_HEADER_BAR(header), "Blinkpad");
+    gtk_header_bar_set_subtitle(GTK_HEADER_BAR(header), "ThinkPad LED Control");
+    gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(header), TRUE);
+    gtk_window_set_titlebar(GTK_WINDOW(window), header);
     gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
     gtk_widget_set_size_request(window, 640, 480);
     g_signal_connect(window, "destroy", G_CALLBACK(on_destroy), NULL);
@@ -588,6 +593,21 @@ int main(int argc, char **argv) {
     gtk_box_pack_start(GTK_BOX(vbox), statusbar, FALSE, FALSE, 0);
 
     load_selections();
+
+    // Modern CSS styling
+    GtkCssProvider *provider = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(provider,
+        "window { background-color: #fafafa; }"
+        "notebook { padding: 4px; }"
+        "button { padding: 6px 14px; border-radius: 6px; }"
+        "frame { margin: 4px; padding: 8px; border-radius: 8px; }"
+        "label { padding: 2px; }"
+        "grid { padding: 4px; }",
+        -1, NULL);
+    gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),
+        GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(provider);
+
     gtk_widget_show_all(window);
     gtk_main();
     return 0;
