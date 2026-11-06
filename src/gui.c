@@ -112,7 +112,11 @@ static GtkWidget *build_control(void) {
 
     const char *headers[] = {"LED", "Brightness", "On/Off", "Trigger"};
     for (int j = 0; j < 4; j++) {
-        GtkWidget *l = gtk_label_new(headers[j]);
+        char markup[64];
+        snprintf(markup, sizeof(markup), "<b>%s</b>", headers[j]);
+        GtkWidget *l = gtk_label_new(NULL);
+        gtk_label_set_markup(GTK_LABEL(l), markup);
+        gtk_widget_set_halign(l, GTK_ALIGN_START);
         gtk_grid_attach(GTK_GRID(grid), l, j, 0, 1, 1);
     }
 
@@ -134,6 +138,8 @@ static GtkWidget *build_control(void) {
         gtk_grid_attach(GTK_GRID(grid), sw, 2, row, 1, 1);
 
         GtkWidget *combo = gtk_combo_box_text_new();
+        gtk_widget_set_size_request(combo, 170, -1);
+        gtk_widget_set_hexpand(combo, FALSE);
         int cnt = 0;
         char **trigs = led_triggers(i, &cnt);
         for (int t = 0; t < cnt; t++) gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(combo), trigs[t]);
@@ -238,6 +244,16 @@ static void select_all_cb(GtkWidget *w, gpointer d) {
     }
 }
 
+static GtkWidget *page_scroll(GtkWidget *child) {
+    GtkWidget *sw = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
+        GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_hexpand(sw, TRUE);
+    gtk_widget_set_vexpand(sw, TRUE);
+    gtk_container_add(GTK_CONTAINER(sw), child);
+    return sw;
+}
+
 static GtkWidget *build_patterns(void) {
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
     gtk_widget_set_hexpand(box, TRUE);
@@ -255,9 +271,13 @@ static GtkWidget *build_patterns(void) {
     gtk_box_pack_start(GTK_BOX(row), pat_combo, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(box), row, FALSE, FALSE, 0);
 
-    /* led selection */
-    GtkWidget *ledbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    gtk_box_pack_start(GTK_BOX(ledbox), gtk_label_new("LEDs:"), FALSE, FALSE, 0);
+    /* led selection (wraps when the window is resized) */
+    gtk_box_pack_start(GTK_BOX(box), gtk_label_new("LEDs:"), FALSE, FALSE, 0);
+    GtkWidget *ledflow = gtk_flow_box_new();
+    gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(ledflow), GTK_SELECTION_NONE);
+    gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(ledflow), 14);
+    gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(ledflow), 6);
+    gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(ledflow), 1);
     for (int i = 0; i < nleds; i++) {
         led_check[i] = gtk_check_button_new_with_label(led_display_name(i));
         /* default active for thinkvantage/power/kbd */
@@ -265,9 +285,9 @@ static GtkWidget *build_patterns(void) {
                    strcmp(leds[i].friendly, "power") == 0 ||
                    strcmp(leds[i].friendly, "kbd_backlight") == 0);
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(led_check[i]), def);
-        gtk_box_pack_start(GTK_BOX(ledbox), led_check[i], FALSE, FALSE, 0);
+        gtk_flow_box_insert(GTK_FLOW_BOX(ledflow), led_check[i], -1);
     }
-    gtk_box_pack_start(GTK_BOX(box), ledbox, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), ledflow, FALSE, FALSE, 0);
 
     /* params grid */
     GtkWidget *grid = gtk_grid_new();
@@ -305,7 +325,7 @@ static GtkWidget *build_patterns(void) {
     pat_status = gtk_label_new("Idle");
     gtk_box_pack_start(GTK_BOX(box), pat_status, FALSE, FALSE, 0);
 
-    return box;
+    return page_scroll(box);
 }
 
 /* In start_pattern_cb we need to add poll timeout. Modify by calling g_timeout_add there. But start_pattern_cb defined above before poll_engine? poll_engine defined after. Forward declare. */
@@ -404,13 +424,19 @@ static GtkWidget *build_notify(void) {
 
     GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
     gtk_box_pack_start(GTK_BOX(row), gtk_label_new("LEDs:"), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), row, FALSE, FALSE, 0);
+    GtkWidget *notifyflow = gtk_flow_box_new();
+    gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(notifyflow), GTK_SELECTION_NONE);
+    gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(notifyflow), 14);
+    gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(notifyflow), 6);
+    gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(notifyflow), 1);
     for (int i = 0; i < nleds; i++) {
         notify_checks[i] = gtk_check_button_new_with_label(led_display_name(i));
         int def = (strcmp(leds[i].friendly, "thinkvantage") == 0);
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(notify_checks[i]), def);
-        gtk_box_pack_start(GTK_BOX(row), notify_checks[i], FALSE, FALSE, 0);
+        gtk_flow_box_insert(GTK_FLOW_BOX(notifyflow), notify_checks[i], -1);
     }
-    gtk_box_pack_start(GTK_BOX(box), row, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), notifyflow, FALSE, FALSE, 0);
 
     GtkWidget *row2 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
     gtk_box_pack_start(GTK_BOX(row2), gtk_label_new("Count:"), FALSE, FALSE, 0);
@@ -435,7 +461,7 @@ static GtkWidget *build_notify(void) {
     daemon_status_label = gtk_label_new("Daemon: stopped");
     gtk_box_pack_start(GTK_BOX(box), daemon_status_label, FALSE, FALSE, 0);
 
-    return box;
+    return page_scroll(box);
 }
 
 /* settings */
@@ -459,7 +485,7 @@ static GtkWidget *build_settings(void) {
 
     gtk_box_pack_start(GTK_BOX(box), gtk_label_new("Blinkpad — native C/GTK3."), FALSE, FALSE, 0);
 
-    return box;
+    return page_scroll(box);
 }
 
 static void on_destroy(GtkWidget *w, gpointer d) {
@@ -580,7 +606,13 @@ int main(int argc, char **argv) {
     gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(header), TRUE);
     gtk_window_set_titlebar(GTK_WINDOW(window), header);
     gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
-    gtk_widget_set_size_request(window, 640, 480);
+
+    /* Minimum size via geometry hints; keeps the window freely resizable. */
+    GdkGeometry hints = {0};
+    hints.min_width = 560;
+    hints.min_height = 420;
+    gtk_window_set_geometry_hints(GTK_WINDOW(window), NULL, &hints, GDK_HINT_MIN_SIZE);
+
     g_signal_connect(window, "destroy", G_CALLBACK(on_destroy), NULL);
 
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
@@ -606,15 +638,23 @@ int main(int argc, char **argv) {
 
     load_selections();
 
-    // Modern CSS styling
+    /* Prefer a dark theme, but never override text/background colors:
+       using the theme's own colours keeps labels readable. */
+    GtkSettings *settings = gtk_settings_get_default();
+    if (settings)
+        g_object_set(settings, "gtk-application-prefer-dark-theme", TRUE, NULL);
+
+    /* Clean, theme-aware spacing and rounding. */
     GtkCssProvider *provider = gtk_css_provider_new();
     gtk_css_provider_load_from_data(provider,
-        "window { background-color: #fafafa; }"
-        "notebook { padding: 4px; }"
-        "button { padding: 6px 14px; border-radius: 6px; }"
-        "frame { margin: 4px; padding: 8px; border-radius: 8px; }"
-        "label { padding: 2px; }"
-        "grid { padding: 4px; }",
+        "notebook > header > tabs > tab { padding: 8px 18px; }"
+        "button { padding: 6px 16px; border-radius: 8px; }"
+        "entry, spinbutton, combobox button { min-height: 30px; border-radius: 8px; }"
+        "frame > border { border-radius: 10px; }"
+        "scale trough { min-height: 6px; border-radius: 3px; }"
+        "scale highlight { border-radius: 3px; }"
+        "switch { border-radius: 14px; }"
+        "statusbar { padding: 4px 10px; }",
         -1, NULL);
     gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),
         GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
