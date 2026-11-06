@@ -1,4 +1,4 @@
-# Blinkpad v1.2.3 (native C)
+# Blinkpad v1.3.0 (native C)
 
 For colorless (monochrome) ThinkPad LEDs.
 
@@ -7,8 +7,9 @@ from Linux, with software patterns and a notification flash.
 
 ## Features
 - Native C binaries: `blinkpad` (CLI) and `blinkpad-gui` (GTK3 GUI).
+- Modern dark interface with a card layout, per-LED icons, and wrapping LED chips.
 - Per-LED brightness and kernel trigger selection.
-- Patterns: solid, blink, strobe, pulse, heartbeat, chase, cylon, wave, SOS, rainbow, notification flash.
+- Patterns: solid, blink, strobe, pulse, heartbeat, chase, cylon, wave, SOS, notification flash.
 - Notification daemon: flashes a chosen LED when a desktop notification arrives.
 - Portable across distros: discovers LEDs at runtime; sets up permissions via systemd-tmpfiles, udev, or chmod fallback.
 

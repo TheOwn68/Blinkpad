@@ -12,25 +12,25 @@ static void load_selections(void);
 static GtkWidget *statusbar;
 static guint status_ctx;
 
-/* control tab widgets */
+/* control page widgets */
 typedef struct {
     int idx;
     GtkWidget *scale;
     GtkWidget *sw;
     GtkWidget *combo;
+    GtkWidget *value;
 } LedRow;
 static LedRow led_rows[MAX_LEDS];
 static int nled_rows = 0;
 
-/* pattern tab */
+/* pattern page */
 static GtkWidget *pat_combo;
 static GtkWidget *led_check[MAX_LEDS];
 static GtkWidget *param_spin[8];
 static const char *param_keys[8] = {"speed","freq","step","count","interval","level","duty","unit"};
 static GtkWidget *pat_status;
 
-/* notify tab */
-static GtkWidget *notify_led_combo;
+/* notify page */
 static GtkWidget *notify_count;
 static GtkWidget *notify_interval;
 static GtkWidget *daemon_status_label;
@@ -46,6 +46,119 @@ static void status_msg(const char *msg) {
     gtk_statusbar_pop(GTK_STATUSBAR(statusbar), status_ctx);
     gtk_statusbar_push(GTK_STATUSBAR(statusbar), status_ctx, msg);
 }
+
+static void add_class(GtkWidget *w, const char *name) {
+    gtk_style_context_add_class(gtk_widget_get_style_context(w), name);
+}
+
+/* ---------- shared UI helpers ---------- */
+
+static GtkWidget *page_new(void) {
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
+    gtk_widget_set_hexpand(box, TRUE);
+    gtk_widget_set_vexpand(box, TRUE);
+    gtk_widget_set_margin_start(box, 22);
+    gtk_widget_set_margin_end(box, 22);
+    gtk_widget_set_margin_top(box, 20);
+    gtk_widget_set_margin_bottom(box, 22);
+    return box;
+}
+
+static GtkWidget *page_scroll(GtkWidget *child) {
+    GtkWidget *sw = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
+        GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_hexpand(sw, TRUE);
+    gtk_widget_set_vexpand(sw, TRUE);
+    gtk_container_add(GTK_CONTAINER(sw), child);
+    return sw;
+}
+
+static GtkWidget *title_block(const char *title, const char *subtitle) {
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
+    GtkWidget *t = gtk_label_new(title);
+    add_class(t, "page-title");
+    gtk_widget_set_halign(t, GTK_ALIGN_START);
+    gtk_box_pack_start(GTK_BOX(box), t, FALSE, FALSE, 0);
+    if (subtitle) {
+        GtkWidget *s = gtk_label_new(subtitle);
+        add_class(s, "page-subtitle");
+        gtk_widget_set_halign(s, GTK_ALIGN_START);
+        gtk_label_set_line_wrap(GTK_LABEL(s), TRUE);
+        gtk_label_set_xalign(GTK_LABEL(s), 0.0f);
+        gtk_box_pack_start(GTK_BOX(box), s, FALSE, FALSE, 0);
+    }
+    return box;
+}
+
+static GtkWidget *section_label(const char *text) {
+    GtkWidget *l = gtk_label_new(text);
+    add_class(l, "section-title");
+    gtk_widget_set_halign(l, GTK_ALIGN_START);
+    return l;
+}
+
+static GtkWidget *card_new(void) {
+    GtkWidget *card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    add_class(card, "card");
+    return card;
+}
+
+/* Icon that best matches a given LED. */
+static GtkWidget *led_icon(int idx) {
+    const char *name = "input-keyboard-symbolic";
+    const char *f = leds[idx].friendly;
+    if (strcmp(f, "lid_logo") == 0)         name = "preferences-desktop-display-symbolic";
+    else if (strcmp(f, "power") == 0)       name = "battery-good-charging-symbolic";
+    else if (strcmp(f, "standby") == 0)     name = "weather-clear-night-symbolic";
+    else if (strcmp(f, "thinkvantage") == 0) name = "dialog-information-symbolic";
+    else if (strcmp(f, "micmute") == 0)     name = "microphone-sensitivity-muted-symbolic";
+    else if (strcmp(f, "mute") == 0)        name = "audio-volume-muted-symbolic";
+
+    GtkIconTheme *theme = gtk_icon_theme_get_default();
+    if (!gtk_icon_theme_has_icon(theme, name))
+        name = "input-keyboard-symbolic";
+
+    GtkWidget *img = gtk_image_new_from_icon_name(name, GTK_ICON_SIZE_MENU);
+    gtk_widget_set_opacity(img, 0.85);
+    gtk_widget_set_valign(img, GTK_ALIGN_CENTER);
+    return img;
+}
+
+/* Pill-shaped toggle button with an icon and a label. */
+static GtkWidget *led_chip(int idx) {
+    GtkWidget *btn = gtk_toggle_button_new();
+    add_class(btn, "chip");
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_box_pack_start(GTK_BOX(box), led_icon(idx), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), gtk_label_new(led_display_name(idx)), FALSE, FALSE, 0);
+    gtk_container_add(GTK_CONTAINER(btn), box);
+    return btn;
+}
+
+static GtkWidget *led_flow(GtkWidget **checks, int default_mode) {
+    GtkWidget *flow = gtk_flow_box_new();
+    gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(flow), GTK_SELECTION_NONE);
+    gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(flow), 8);
+    gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(flow), 8);
+    gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(flow), 1);
+    for (int i = 0; i < nleds; i++) {
+        checks[i] = led_chip(i);
+        int def = 0;
+        if (default_mode == 1) {
+            def = (strcmp(leds[i].friendly, "thinkvantage") == 0);
+        } else if (default_mode == 2) {
+            def = (strcmp(leds[i].friendly, "thinkvantage") == 0 ||
+                   strcmp(leds[i].friendly, "power") == 0 ||
+                   strcmp(leds[i].friendly, "kbd_backlight") == 0);
+        }
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(checks[i]), def);
+        gtk_flow_box_insert(GTK_FLOW_BOX(flow), checks[i], -1);
+    }
+    return flow;
+}
+
+/* ---------- control page ---------- */
 
 static int is_mute_led(int idx) {
     return (strcmp(leds[idx].friendly, "mute") == 0 || strcmp(leds[idx].friendly, "micmute") == 0);
@@ -63,7 +176,7 @@ static void all_off_cb(GtkWidget *w, gpointer d) {
         gtk_range_set_value(GTK_RANGE(led_rows[i].scale), 0);
         gtk_switch_set_active(GTK_SWITCH(led_rows[i].sw), FALSE);
     }
-    status_msg("All off (mute LEDs preserved)");
+    status_msg("All lights off (mute LEDs preserved)");
 }
 
 static void all_max_cb(GtkWidget *w, gpointer d) {
@@ -76,16 +189,21 @@ static void all_max_cb(GtkWidget *w, gpointer d) {
         gtk_range_set_value(GTK_RANGE(led_rows[i].scale), led_max(led_rows[i].idx));
         gtk_switch_set_active(GTK_SWITCH(led_rows[i].sw), TRUE);
     }
-    status_msg("All max (mute LEDs preserved)");
+    status_msg("All lights at maximum (mute LEDs preserved)");
 }
 
 static void on_scale_changed(GtkRange *r, gpointer data) {
     LedRow *row = (LedRow *)data;
     int val = (int)gtk_range_get_value(r);
     led_set(row->idx, val);
+    if (row->value) {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%d", val);
+        gtk_label_set_text(GTK_LABEL(row->value), buf);
+    }
 }
 
-static void on_switch_state_set(GtkSwitch *sw, gboolean state, gpointer data) {
+static gboolean on_switch_state_set(GtkSwitch *sw, gboolean state, gpointer data) {
     LedRow *row = (LedRow *)data;
     if (state) {
         int v = (int)gtk_range_get_value(GTK_RANGE(row->scale));
@@ -94,7 +212,7 @@ static void on_switch_state_set(GtkSwitch *sw, gboolean state, gpointer data) {
     } else {
         led_set(row->idx, 0);
     }
-    return;
+    return FALSE;
 }
 
 static void on_trigger_changed(GtkComboBox *combo, gpointer data) {
@@ -103,82 +221,114 @@ static void on_trigger_changed(GtkComboBox *combo, gpointer data) {
     if (txt) { led_set_trigger(row->idx, txt); g_free(txt); }
 }
 
-static GtkWidget *build_control(void) {
+static GtkWidget *build_led_row(int i) {
     GtkWidget *grid = gtk_grid_new();
     gtk_grid_set_column_spacing(GTK_GRID(grid), 12);
-    gtk_grid_set_row_spacing(GTK_GRID(grid), 8);
-    gtk_widget_set_margin_start(grid, 12); gtk_widget_set_margin_end(grid, 12);
-    gtk_widget_set_margin_top(grid, 12); gtk_widget_set_margin_bottom(grid, 12);
+    gtk_grid_set_row_spacing(GTK_GRID(grid), 3);
+    gtk_widget_set_margin_start(grid, 10);
+    gtk_widget_set_margin_end(grid, 10);
+    gtk_widget_set_margin_top(grid, 9);
+    gtk_widget_set_margin_bottom(grid, 9);
 
-    const char *headers[] = {"LED", "Brightness", "On/Off", "Trigger"};
-    for (int j = 0; j < 4; j++) {
-        char markup[64];
-        snprintf(markup, sizeof(markup), "<b>%s</b>", headers[j]);
-        GtkWidget *l = gtk_label_new(NULL);
-        gtk_label_set_markup(GTK_LABEL(l), markup);
-        gtk_widget_set_halign(l, GTK_ALIGN_START);
-        gtk_grid_attach(GTK_GRID(grid), l, j, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), led_icon(i), 0, 0, 1, 1);
+
+    GtkWidget *lbl = gtk_label_new(led_display_name(i));
+    add_class(lbl, "led-name");
+    gtk_widget_set_halign(lbl, GTK_ALIGN_START);
+    gtk_widget_set_valign(lbl, GTK_ALIGN_CENTER);
+    gtk_widget_set_size_request(lbl, 165, -1);
+    gtk_label_set_ellipsize(GTK_LABEL(lbl), PANGO_ELLIPSIZE_END);
+    gtk_grid_attach(GTK_GRID(grid), lbl, 1, 0, 1, 1);
+
+    GtkAdjustment *adj = gtk_adjustment_new(led_get(i), 0, led_max(i), 1, 1, 0);
+    GtkWidget *scale = gtk_scale_new(GTK_ORIENTATION_HORIZONTAL, adj);
+    gtk_scale_set_digits(GTK_SCALE(scale), 0);
+    gtk_scale_set_draw_value(GTK_SCALE(scale), FALSE);
+    gtk_widget_set_hexpand(scale, TRUE);
+    gtk_widget_set_valign(scale, GTK_ALIGN_CENTER);
+    gtk_grid_attach(GTK_GRID(grid), scale, 2, 0, 1, 1);
+
+    char vbuf[16];
+    snprintf(vbuf, sizeof(vbuf), "%d", led_get(i));
+    GtkWidget *val = gtk_label_new(vbuf);
+    add_class(val, "dim");
+    gtk_widget_set_size_request(val, 22, -1);
+    gtk_widget_set_halign(val, GTK_ALIGN_END);
+    gtk_widget_set_valign(val, GTK_ALIGN_CENTER);
+    gtk_grid_attach(GTK_GRID(grid), val, 3, 0, 1, 1);
+
+    GtkWidget *sw = gtk_switch_new();
+    gtk_switch_set_active(GTK_SWITCH(sw), led_get(i) > 0);
+    gtk_widget_set_valign(sw, GTK_ALIGN_CENTER);
+    gtk_grid_attach(GTK_GRID(grid), sw, 4, 0, 1, 1);
+
+    GtkWidget *combo = gtk_combo_box_text_new();
+    gtk_widget_set_size_request(combo, 150, -1);
+    gtk_widget_set_hexpand(combo, FALSE);
+    gtk_widget_set_valign(combo, GTK_ALIGN_CENTER);
+    int cnt = 0;
+    char **trigs = led_triggers(i, &cnt);
+    for (int t = 0; t < cnt; t++) gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(combo), trigs[t]);
+    char *cur = led_trigger(i);
+    for (int t = 0; t < cnt; t++) {
+        if (strcmp(trigs[t], cur) == 0) { gtk_combo_box_set_active(GTK_COMBO_BOX(combo), t); break; }
     }
+    gtk_grid_attach(GTK_GRID(grid), combo, 5, 0, 1, 1);
 
-    nled_rows = 0;
-    for (int i = 0; i < nleds; i++) {
-        int row = i + 1;
-        GtkWidget *lbl = gtk_label_new(led_display_name(i));
-        gtk_widget_set_halign(lbl, GTK_ALIGN_START);
-        gtk_grid_attach(GTK_GRID(grid), lbl, 0, row, 1, 1);
+    LedRow *row = &led_rows[nled_rows++];
+    row->idx = i;
+    row->scale = scale;
+    row->sw = sw;
+    row->combo = combo;
+    row->value = val;
 
-        GtkAdjustment *adj = gtk_adjustment_new(led_get(i), 0, led_max(i), 1, 1, 0);
-        GtkWidget *scale = gtk_scale_new(GTK_ORIENTATION_HORIZONTAL, adj);
-        gtk_scale_set_digits(GTK_SCALE(scale), 0);
-        gtk_widget_set_hexpand(scale, TRUE);
-        gtk_grid_attach(GTK_GRID(grid), scale, 1, row, 1, 1);
-
-        GtkWidget *sw = gtk_switch_new();
-        gtk_switch_set_active(GTK_SWITCH(sw), led_get(i) > 0);
-        gtk_grid_attach(GTK_GRID(grid), sw, 2, row, 1, 1);
-
-        GtkWidget *combo = gtk_combo_box_text_new();
-        gtk_widget_set_size_request(combo, 170, -1);
-        gtk_widget_set_hexpand(combo, FALSE);
-        int cnt = 0;
-        char **trigs = led_triggers(i, &cnt);
-        for (int t = 0; t < cnt; t++) gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(combo), trigs[t]);
-        /* set active to current trigger */
-        char *cur = led_trigger(i);
-        for (int t = 0; t < cnt; t++) {
-            if (strcmp(trigs[t], cur) == 0) { gtk_combo_box_set_active(GTK_COMBO_BOX(combo), t); break; }
-        }
-        gtk_grid_attach(GTK_GRID(grid), combo, 3, row, 1, 1);
-
-        led_rows[nled_rows].idx = i;
-        led_rows[nled_rows].scale = scale;
-        led_rows[nled_rows].sw = sw;
-        led_rows[nled_rows].combo = combo;
-        nled_rows++;
-
-        g_signal_connect(scale, "value-changed", G_CALLBACK(on_scale_changed), &led_rows[nled_rows-1]);
-        g_signal_connect(sw, "state-set", G_CALLBACK(on_switch_state_set), &led_rows[nled_rows-1]);
-        g_signal_connect(combo, "changed", G_CALLBACK(on_trigger_changed), &led_rows[nled_rows-1]);
-    }
-
-    /* buttons */
-    GtkWidget *btnbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    GtkWidget *offbtn = gtk_button_new_with_label("All Off");
-    g_signal_connect(offbtn, "clicked", G_CALLBACK(all_off_cb), NULL);
-    gtk_box_pack_start(GTK_BOX(btnbox), offbtn, FALSE, FALSE, 0);
-    GtkWidget *maxbtn = gtk_button_new_with_label("All Max");
-    g_signal_connect(maxbtn, "clicked", G_CALLBACK(all_max_cb), NULL);
-    gtk_box_pack_start(GTK_BOX(btnbox), maxbtn, FALSE, FALSE, 0);
-    gtk_grid_attach(GTK_GRID(grid), btnbox, 0, nleds + 1, 4, 1);
-
-    GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
-    gtk_widget_set_hexpand(scrolled, TRUE);
-    gtk_widget_set_vexpand(scrolled, TRUE);
-    gtk_container_add(GTK_CONTAINER(scrolled), grid);
-    return scrolled;
+    g_signal_connect(scale, "value-changed", G_CALLBACK(on_scale_changed), row);
+    g_signal_connect(sw, "state-set", G_CALLBACK(on_switch_state_set), row);
+    g_signal_connect(combo, "changed", G_CALLBACK(on_trigger_changed), row);
+    return grid;
 }
 
-/* pattern tab */
+static GtkWidget *build_control(void) {
+    GtkWidget *page = page_new();
+
+    GtkWidget *head = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
+    gtk_box_pack_start(GTK_BOX(head), title_block("Lights",
+        "Adjust each ThinkPad LED independently."), TRUE, TRUE, 0);
+
+    GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    add_class(actions, "linked");
+    GtkWidget *offbtn = gtk_button_new_with_label("All Off");
+    g_signal_connect(offbtn, "clicked", G_CALLBACK(all_off_cb), NULL);
+    gtk_box_pack_start(GTK_BOX(actions), offbtn, FALSE, FALSE, 0);
+    GtkWidget *maxbtn = gtk_button_new_with_label("All Max");
+    add_class(maxbtn, "suggested-action");
+    g_signal_connect(maxbtn, "clicked", G_CALLBACK(all_max_cb), NULL);
+    gtk_box_pack_start(GTK_BOX(actions), maxbtn, FALSE, FALSE, 0);
+    gtk_widget_set_valign(actions, GTK_ALIGN_CENTER);
+    gtk_box_pack_start(GTK_BOX(head), actions, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(page), head, FALSE, FALSE, 0);
+
+    GtkWidget *card = card_new();
+    nled_rows = 0;
+    for (int i = 0; i < nleds; i++) {
+        if (i > 0)
+            gtk_box_pack_start(GTK_BOX(card), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL), FALSE, FALSE, 0);
+        gtk_box_pack_start(GTK_BOX(card), build_led_row(i), FALSE, FALSE, 0);
+    }
+    gtk_box_pack_start(GTK_BOX(page), card, FALSE, FALSE, 0);
+
+    GtkWidget *hint = gtk_label_new("Tip: the trigger controls kernel-driven blinking. Leave it on “none” for manual control.");
+    add_class(hint, "dim");
+    gtk_widget_set_halign(hint, GTK_ALIGN_START);
+    gtk_label_set_line_wrap(GTK_LABEL(hint), TRUE);
+    gtk_label_set_xalign(GTK_LABEL(hint), 0.0f);
+    gtk_box_pack_start(GTK_BOX(page), hint, FALSE, FALSE, 0);
+
+    return page_scroll(page);
+}
+
+/* ---------- patterns page ---------- */
+
 static void start_pattern_cb(GtkWidget *w, gpointer d) {
     if (current_engine) {
         pattern_stop(current_engine, 1);
@@ -186,7 +336,6 @@ static void start_pattern_cb(GtkWidget *w, gpointer d) {
         free(current_engine);
         current_engine = NULL;
     }
-    /* selected leds */
     int indices[64]; int ni = 0;
     for (int i = 0; i < nleds; i++) {
         if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(led_check[i]))) {
@@ -194,13 +343,11 @@ static void start_pattern_cb(GtkWidget *w, gpointer d) {
         }
     }
     if (ni == 0 && nleds > 0) { indices[0] = 0; ni = 1; }
-    /* pattern name */
     gchar *pname = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(pat_combo));
     if (!pname) pname = g_strdup("solid");
 
     current_engine = malloc(sizeof(PatternEngine));
     pattern_init(current_engine, indices, ni, pname);
-    /* params */
     for (int p = 0; p < 8; p++) {
         double v = gtk_spin_button_get_value(GTK_SPIN_BUTTON(param_spin[p]));
         pattern_set_param(current_engine, param_keys[p], v);
@@ -212,10 +359,6 @@ static void start_pattern_cb(GtkWidget *w, gpointer d) {
     g_free(pname);
     save_selections();
     g_timeout_add(200, poll_engine, NULL);
-
-    /* poll */
-    /* use timeout */
-    /* store in a simple loop via g_timeout_add */
 }
 
 static gboolean poll_engine(gpointer data) {
@@ -244,98 +387,90 @@ static void select_all_cb(GtkWidget *w, gpointer d) {
     }
 }
 
-static GtkWidget *page_scroll(GtkWidget *child) {
-    GtkWidget *sw = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw),
-        GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-    gtk_widget_set_hexpand(sw, TRUE);
-    gtk_widget_set_vexpand(sw, TRUE);
-    gtk_container_add(GTK_CONTAINER(sw), child);
-    return sw;
-}
-
 static GtkWidget *build_patterns(void) {
-    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-    gtk_widget_set_hexpand(box, TRUE);
-    gtk_widget_set_vexpand(box, TRUE);
-    gtk_widget_set_margin_start(box, 12); gtk_widget_set_margin_end(box, 12);
-    gtk_widget_set_margin_top(box, 12); gtk_widget_set_margin_bottom(box, 12);
+    GtkWidget *page = page_new();
+    gtk_box_pack_start(GTK_BOX(page), title_block("Patterns",
+        "Animate the selected LEDs with a pattern."), FALSE, FALSE, 0);
 
-    /* pattern selector */
-    GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    gtk_box_pack_start(GTK_BOX(row), gtk_label_new("Pattern:"), FALSE, FALSE, 0);
+    /* pattern chooser card */
+    GtkWidget *patcard = card_new();
+    GtkWidget *patrow = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 14);
+    gtk_widget_set_margin_start(patrow, 12); gtk_widget_set_margin_end(patrow, 12);
+    gtk_widget_set_margin_top(patrow, 12); gtk_widget_set_margin_bottom(patrow, 12);
+    gtk_box_pack_start(GTK_BOX(patrow), section_label("PATTERN"), FALSE, FALSE, 0);
     pat_combo = gtk_combo_box_text_new();
+    gtk_widget_set_size_request(pat_combo, 220, -1);
     const char *pats[] = {"off","solid","blink","strobe","pulse","heartbeat","chase","cylon","wave","sos","notification"};
     for (int i = 0; i < 11; i++) gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(pat_combo), pats[i]);
     gtk_combo_box_set_active(GTK_COMBO_BOX(pat_combo), 1);
-    gtk_box_pack_start(GTK_BOX(row), pat_combo, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(box), row, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(patrow), pat_combo, FALSE, FALSE, 0);
+    pat_status = gtk_label_new("Idle");
+    add_class(pat_status, "status-pill");
+    gtk_widget_set_valign(pat_status, GTK_ALIGN_CENTER);
+    gtk_box_pack_end(GTK_BOX(patrow), pat_status, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(patcard), patrow, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(page), patcard, FALSE, FALSE, 0);
 
-    /* led selection (wraps when the window is resized) */
-    gtk_box_pack_start(GTK_BOX(box), gtk_label_new("LEDs:"), FALSE, FALSE, 0);
-    GtkWidget *ledflow = gtk_flow_box_new();
-    gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(ledflow), GTK_SELECTION_NONE);
-    gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(ledflow), 14);
-    gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(ledflow), 6);
-    gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(ledflow), 1);
-    for (int i = 0; i < nleds; i++) {
-        led_check[i] = gtk_check_button_new_with_label(led_display_name(i));
-        /* default active for thinkvantage/power/kbd */
-        int def = (strcmp(leds[i].friendly, "thinkvantage") == 0 ||
-                   strcmp(leds[i].friendly, "power") == 0 ||
-                   strcmp(leds[i].friendly, "kbd_backlight") == 0);
-        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(led_check[i]), def);
-        gtk_flow_box_insert(GTK_FLOW_BOX(ledflow), led_check[i], -1);
-    }
-    gtk_box_pack_start(GTK_BOX(box), ledflow, FALSE, FALSE, 0);
+    /* LED chips card */
+    GtkWidget *ledcard = card_new();
+    GtkWidget *ledwrap = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_set_margin_start(ledwrap, 12); gtk_widget_set_margin_end(ledwrap, 12);
+    gtk_widget_set_margin_top(ledwrap, 12); gtk_widget_set_margin_bottom(ledwrap, 12);
+    gtk_box_pack_start(GTK_BOX(ledwrap), section_label("LEDS"), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(ledwrap), led_flow(led_check, 2), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(ledcard), ledwrap, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(page), ledcard, FALSE, FALSE, 0);
 
-    /* params grid */
+    /* parameters card */
+    GtkWidget *paramcard = card_new();
+    GtkWidget *paramwrap = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    gtk_widget_set_margin_start(paramwrap, 12); gtk_widget_set_margin_end(paramwrap, 12);
+    gtk_widget_set_margin_top(paramwrap, 12); gtk_widget_set_margin_bottom(paramwrap, 12);
+    gtk_box_pack_start(GTK_BOX(paramwrap), section_label("PARAMETERS"), FALSE, FALSE, 0);
+
     GtkWidget *grid = gtk_grid_new();
-    gtk_grid_set_column_spacing(GTK_GRID(grid), 8);
-    gtk_grid_set_row_spacing(GTK_GRID(grid), 6);
-    const char *keys[8] = {"speed","freq","step","count","interval","level","duty","unit"};
+    gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
+    gtk_grid_set_row_spacing(GTK_GRID(grid), 8);
+    const char *names[8] = {"Speed","Frequency","Step","Count","Interval","Level","Duty","Unit"};
     double defaults[8] = {1.0,2.0,0.15,3,0.15,1.0,0.5,0.2};
     double los[8] = {0.1,0.1,0.05,1,0.05,0.0,0.1,0.05};
     double his[8] = {5.0,20.0,1.0,20,1.0,1.0,0.9,1.0};
     for (int p = 0; p < 8; p++) {
-        gtk_grid_attach(GTK_GRID(grid), gtk_label_new(keys[p]), 0, p, 1, 1);
+        int col = (p % 2) * 2;
+        int row = p / 2;
+        gtk_grid_attach(GTK_GRID(grid), gtk_label_new(names[p]), col, row, 1, 1);
         GtkAdjustment *adj;
         if (p == 3) adj = gtk_adjustment_new(defaults[p], los[p], his[p], 1, 1, 0);
         else adj = gtk_adjustment_new(defaults[p], los[p], his[p], 0.05, 0.1, 0);
         GtkWidget *sp = gtk_spin_button_new(adj, 1, (p==3)?0:2);
+        gtk_widget_set_size_request(sp, 110, -1);
         param_spin[p] = sp;
-        gtk_grid_attach(GTK_GRID(grid), sp, 1, p, 1, 1);
+        gtk_grid_attach(GTK_GRID(grid), sp, col + 1, row, 1, 1);
     }
-    gtk_box_pack_start(GTK_BOX(box), grid, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(paramwrap), grid, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(paramcard), paramwrap, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(page), paramcard, FALSE, FALSE, 0);
 
-    /* buttons */
-    GtkWidget *btnbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    /* action row */
+    GtkWidget *btnbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     GtkWidget *start = gtk_button_new_with_label("Start");
+    add_class(start, "suggested-action");
     g_signal_connect(start, "clicked", G_CALLBACK(start_pattern_cb), NULL);
     gtk_box_pack_start(GTK_BOX(btnbox), start, FALSE, FALSE, 0);
-    /* connect poll after start? We'll add timeout in start callback via g_timeout_add */
     GtkWidget *stop = gtk_button_new_with_label("Stop");
     g_signal_connect(stop, "clicked", G_CALLBACK(stop_pattern_cb), NULL);
     gtk_box_pack_start(GTK_BOX(btnbox), stop, FALSE, FALSE, 0);
-    GtkWidget *allbtn = gtk_button_new_with_label("All");
+    GtkWidget *allbtn = gtk_button_new_with_label("Select All");
     g_signal_connect(allbtn, "clicked", G_CALLBACK(select_all_cb), NULL);
     gtk_box_pack_start(GTK_BOX(btnbox), allbtn, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(box), btnbox, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(page), btnbox, FALSE, FALSE, 0);
 
-    pat_status = gtk_label_new("Idle");
-    gtk_box_pack_start(GTK_BOX(box), pat_status, FALSE, FALSE, 0);
-
-    return page_scroll(box);
+    return page_scroll(page);
 }
 
-/* In start_pattern_cb we need to add poll timeout. Modify by calling g_timeout_add there. But start_pattern_cb defined above before poll_engine? poll_engine defined after. Forward declare. */
-static gboolean poll_engine(gpointer data);
+/* ---------- notifications page ---------- */
 
-/* We'll patch start_pattern_cb: after pattern_start, add timeout. Since function already written, we need to edit. Instead, redefine start_pattern_cb here? It's already defined. Let's just add a note: we'll modify via sed? Better: edit file. */
-
-/* notify tab */
 static void do_flash_gui(void) {
-    /* get selected led */
     int indices[64]; int ni = 0;
     for (int i = 0; i < nleds; i++) {
         if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(notify_checks[i]))) indices[ni++] = i;
@@ -392,7 +527,7 @@ static void toggle_daemon_cb(GtkWidget *w, gpointer d) {
         }
         daemon_running = 0;
         gtk_button_set_label(GTK_BUTTON(daemon_btn), "Start notification daemon");
-        gtk_label_set_text(GTK_LABEL(daemon_status_label), "Daemon: stopped");
+        gtk_label_set_text(GTK_LABEL(daemon_status_label), "Stopped");
         return;
     }
     daemon_nleds = 0;
@@ -406,65 +541,71 @@ static void toggle_daemon_cb(GtkWidget *w, gpointer d) {
     daemon_running = 1;
     daemon_thread_active = 1;
     gtk_button_set_label(GTK_BUTTON(daemon_btn), "Stop notification daemon");
-    gtk_label_set_text(GTK_LABEL(daemon_status_label), "Daemon: running");
+    gtk_label_set_text(GTK_LABEL(daemon_status_label), "Running");
 
-    /* start thread */
     pthread_create(&daemon_thread, NULL, gui_daemon_thread, NULL);
     save_selections();
 }
 
 static GtkWidget *build_notify(void) {
-    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-    gtk_widget_set_hexpand(box, TRUE);
-    gtk_widget_set_vexpand(box, TRUE);
-    gtk_widget_set_margin_start(box, 12); gtk_widget_set_margin_end(box, 12);
-    gtk_widget_set_margin_top(box, 12); gtk_widget_set_margin_bottom(box, 12);
+    GtkWidget *page = page_new();
+    gtk_box_pack_start(GTK_BOX(page), title_block("Notifications",
+        "Flash lights whenever a desktop notification arrives."), FALSE, FALSE, 0);
 
-    gtk_box_pack_start(GTK_BOX(box), gtk_label_new("Flash a ThinkPad LED when a desktop notification arrives."), FALSE, FALSE, 0);
+    /* LED chips card */
+    GtkWidget *ledcard = card_new();
+    GtkWidget *ledwrap = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_set_margin_start(ledwrap, 12); gtk_widget_set_margin_end(ledwrap, 12);
+    gtk_widget_set_margin_top(ledwrap, 12); gtk_widget_set_margin_bottom(ledwrap, 12);
+    gtk_box_pack_start(GTK_BOX(ledwrap), section_label("LEDS TO FLASH"), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(ledwrap), led_flow(notify_checks, 1), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(ledcard), ledwrap, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(page), ledcard, FALSE, FALSE, 0);
 
-    GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    gtk_box_pack_start(GTK_BOX(row), gtk_label_new("LEDs:"), FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(box), row, FALSE, FALSE, 0);
-    GtkWidget *notifyflow = gtk_flow_box_new();
-    gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(notifyflow), GTK_SELECTION_NONE);
-    gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(notifyflow), 14);
-    gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(notifyflow), 6);
-    gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(notifyflow), 1);
-    for (int i = 0; i < nleds; i++) {
-        notify_checks[i] = gtk_check_button_new_with_label(led_display_name(i));
-        int def = (strcmp(leds[i].friendly, "thinkvantage") == 0);
-        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(notify_checks[i]), def);
-        gtk_flow_box_insert(GTK_FLOW_BOX(notifyflow), notify_checks[i], -1);
-    }
-    gtk_box_pack_start(GTK_BOX(box), notifyflow, FALSE, FALSE, 0);
+    /* timing card */
+    GtkWidget *timecard = card_new();
+    GtkWidget *timewrap = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    gtk_widget_set_margin_start(timewrap, 12); gtk_widget_set_margin_end(timewrap, 12);
+    gtk_widget_set_margin_top(timewrap, 12); gtk_widget_set_margin_bottom(timewrap, 12);
+    gtk_box_pack_start(GTK_BOX(timewrap), section_label("FLASH SETTINGS"), FALSE, FALSE, 0);
 
-    GtkWidget *row2 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    gtk_box_pack_start(GTK_BOX(row2), gtk_label_new("Count:"), FALSE, FALSE, 0);
+    GtkWidget *row2 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    gtk_box_pack_start(GTK_BOX(row2), gtk_label_new("Count"), FALSE, FALSE, 0);
     notify_count = gtk_spin_button_new_with_range(1, 20, 1);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(notify_count), 4);
     gtk_box_pack_start(GTK_BOX(row2), notify_count, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(row2), gtk_label_new("Interval:"), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(row2), gtk_label_new("Interval (s)"), FALSE, FALSE, 0);
     notify_interval = gtk_spin_button_new_with_range(0.05, 1.0, 0.05);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(notify_interval), 0.1);
     gtk_box_pack_start(GTK_BOX(row2), notify_interval, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(box), row2, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(timewrap), row2, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(timecard), timewrap, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(page), timecard, FALSE, FALSE, 0);
 
-    GtkWidget *btns = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    /* actions card */
+    GtkWidget *actcard = card_new();
+    GtkWidget *actwrap = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_widget_set_margin_start(actwrap, 12); gtk_widget_set_margin_end(actwrap, 12);
+    gtk_widget_set_margin_top(actwrap, 12); gtk_widget_set_margin_bottom(actwrap, 12);
     GtkWidget *test = gtk_button_new_with_label("Test flash");
+    add_class(test, "suggested-action");
     g_signal_connect(test, "clicked", G_CALLBACK(test_flash_cb), NULL);
-    gtk_box_pack_start(GTK_BOX(btns), test, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(actwrap), test, FALSE, FALSE, 0);
     daemon_btn = gtk_button_new_with_label("Start notification daemon");
     g_signal_connect(daemon_btn, "clicked", G_CALLBACK(toggle_daemon_cb), NULL);
-    gtk_box_pack_start(GTK_BOX(btns), daemon_btn, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(box), btns, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(actwrap), daemon_btn, FALSE, FALSE, 0);
+    daemon_status_label = gtk_label_new("Stopped");
+    add_class(daemon_status_label, "status-pill");
+    gtk_widget_set_valign(daemon_status_label, GTK_ALIGN_CENTER);
+    gtk_box_pack_end(GTK_BOX(actwrap), daemon_status_label, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(actcard), actwrap, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(page), actcard, FALSE, FALSE, 0);
 
-    daemon_status_label = gtk_label_new("Daemon: stopped");
-    gtk_box_pack_start(GTK_BOX(box), daemon_status_label, FALSE, FALSE, 0);
-
-    return page_scroll(box);
+    return page_scroll(page);
 }
 
-/* settings */
+/* ---------- settings page ---------- */
+
 static void fix_perms_cb(GtkWidget *w, gpointer d) {
     int ok = ensure_permissions();
     char msg[128];
@@ -473,20 +614,47 @@ static void fix_perms_cb(GtkWidget *w, gpointer d) {
 }
 
 static GtkWidget *build_settings(void) {
-    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-    gtk_widget_set_hexpand(box, TRUE);
-    gtk_widget_set_vexpand(box, TRUE);
-    gtk_widget_set_margin_start(box, 12); gtk_widget_set_margin_end(box, 12);
-    gtk_widget_set_margin_top(box, 12); gtk_widget_set_margin_bottom(box, 12);
+    GtkWidget *page = page_new();
+    gtk_box_pack_start(GTK_BOX(page), title_block("Settings",
+        "Permissions and application information."), FALSE, FALSE, 0);
 
-    GtkWidget *fix = gtk_button_new_with_label("Fix permissions (make LEDs writable)");
+    GtkWidget *permcard = card_new();
+    GtkWidget *permwrap = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_set_margin_start(permwrap, 12); gtk_widget_set_margin_end(permwrap, 12);
+    gtk_widget_set_margin_top(permwrap, 12); gtk_widget_set_margin_bottom(permwrap, 12);
+    gtk_box_pack_start(GTK_BOX(permwrap), section_label("PERMISSIONS"), FALSE, FALSE, 0);
+    GtkWidget *permdesc = gtk_label_new("Blinkpad needs write access to the LED sysfs entries. Run this once if lights cannot be changed.");
+    add_class(permdesc, "dim");
+    gtk_label_set_line_wrap(GTK_LABEL(permdesc), TRUE);
+    gtk_label_set_xalign(GTK_LABEL(permdesc), 0.0f);
+    gtk_box_pack_start(GTK_BOX(permwrap), permdesc, FALSE, FALSE, 0);
+    GtkWidget *fix = gtk_button_new_with_label("Fix permissions");
+    gtk_widget_set_halign(fix, GTK_ALIGN_START);
     g_signal_connect(fix, "clicked", G_CALLBACK(fix_perms_cb), NULL);
-    gtk_box_pack_start(GTK_BOX(box), fix, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(permwrap), fix, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(permcard), permwrap, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(page), permcard, FALSE, FALSE, 0);
 
-    gtk_box_pack_start(GTK_BOX(box), gtk_label_new("Blinkpad — native C/GTK3."), FALSE, FALSE, 0);
+    GtkWidget *aboutcard = card_new();
+    GtkWidget *aboutwrap = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    gtk_widget_set_margin_start(aboutwrap, 12); gtk_widget_set_margin_end(aboutwrap, 12);
+    gtk_widget_set_margin_top(aboutwrap, 12); gtk_widget_set_margin_bottom(aboutwrap, 12);
+    gtk_box_pack_start(GTK_BOX(aboutwrap), section_label("ABOUT"), FALSE, FALSE, 0);
+    GtkWidget *name = gtk_label_new(NULL);
+    gtk_label_set_markup(GTK_LABEL(name), "<b>Blinkpad</b>  ·  1.3.0");
+    gtk_widget_set_halign(name, GTK_ALIGN_START);
+    gtk_box_pack_start(GTK_BOX(aboutwrap), name, FALSE, FALSE, 0);
+    GtkWidget *desc = gtk_label_new("Native C / GTK3 control for monochrome ThinkPad LEDs.");
+    add_class(desc, "dim");
+    gtk_label_set_xalign(GTK_LABEL(desc), 0.0f);
+    gtk_box_pack_start(GTK_BOX(aboutwrap), desc, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(aboutcard), aboutwrap, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(page), aboutcard, FALSE, FALSE, 0);
 
-    return page_scroll(box);
+    return page_scroll(page);
 }
+
+/* ---------- lifecycle ---------- */
 
 static void on_destroy(GtkWidget *w, gpointer d) {
     if (current_engine) {
@@ -513,7 +681,6 @@ static void save_selections(void) {
     snprintf(path, sizeof(path), "%s/ui.conf", dir);
     FILE *f = fopen(path, "w");
     if (!f) return;
-    // pattern leds
     fprintf(f, "pattern_leds=");
     int first = 1;
     for (int i = 0; i < nleds; i++) {
@@ -524,11 +691,9 @@ static void save_selections(void) {
         }
     }
     fprintf(f, "\n");
-    // pattern name
     gchar *pname = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(pat_combo));
     fprintf(f, "pattern=%s\n", pname ? pname : "solid");
     g_free(pname);
-    // notify leds
     fprintf(f, "notify_leds=");
     first = 1;
     for (int i = 0; i < nleds; i++) {
@@ -554,7 +719,6 @@ static void load_selections(void) {
         line[strcspn(line, "\n")] = '\0';
         if (strncmp(line, "pattern_leds=", 13) == 0) {
             char *val = line + 13;
-            // default all off first
             for (int i = 0; i < nleds; i++) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(led_check[i]), FALSE);
             char buf[1024]; strcpy(buf, val);
             char *tok = strtok(buf, ",");
@@ -588,6 +752,12 @@ static void load_selections(void) {
 
 int main(int argc, char **argv) {
     gtk_init(&argc, &argv);
+
+    /* Resolve the theme as dark before building any widgets. */
+    GtkSettings *settings = gtk_settings_get_default();
+    if (settings)
+        g_object_set(settings, "gtk-application-prefer-dark-theme", TRUE, NULL);
+
     discover_leds();
     for (int i = 0; i < nleds; i++) {
         if (strcmp(leds[i].friendly, "mute") == 0) {
@@ -599,38 +769,38 @@ int main(int argc, char **argv) {
 
     window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "Blinkpad");
-    gtk_window_set_default_size(GTK_WINDOW(window), 820, 600);
+    gtk_window_set_default_size(GTK_WINDOW(window), 940, 680);
+
     GtkWidget *header = gtk_header_bar_new();
-    gtk_header_bar_set_title(GTK_HEADER_BAR(header), "Blinkpad");
-    gtk_header_bar_set_subtitle(GTK_HEADER_BAR(header), "ThinkPad LED Control");
     gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(header), TRUE);
+    GtkWidget *brand = gtk_label_new(NULL);
+    gtk_label_set_markup(GTK_LABEL(brand), "<b>Blinkpad</b>");
+    gtk_header_bar_pack_start(GTK_HEADER_BAR(header), brand);
     gtk_window_set_titlebar(GTK_WINDOW(window), header);
     gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
 
-    /* Minimum size via geometry hints; keeps the window freely resizable. */
     GdkGeometry hints = {0};
-    hints.min_width = 560;
-    hints.min_height = 420;
+    hints.min_width = 620;
+    hints.min_height = 440;
     gtk_window_set_geometry_hints(GTK_WINDOW(window), NULL, &hints, GDK_HINT_MIN_SIZE);
-
     g_signal_connect(window, "destroy", G_CALLBACK(on_destroy), NULL);
 
-    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
-    gtk_widget_set_hexpand(vbox, TRUE);
-    gtk_widget_set_vexpand(vbox, TRUE);
+    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_container_add(GTK_CONTAINER(window), vbox);
 
-    /* header? just title already */
+    GtkWidget *stack = gtk_stack_new();
+    gtk_stack_set_transition_type(GTK_STACK(stack), GTK_STACK_TRANSITION_TYPE_CROSSFADE);
+    gtk_stack_set_transition_duration(GTK_STACK(stack), 160);
+    gtk_box_pack_start(GTK_BOX(vbox), stack, TRUE, TRUE, 0);
 
-    GtkWidget *notebook = gtk_notebook_new();
-    gtk_widget_set_hexpand(notebook, TRUE);
-    gtk_widget_set_vexpand(notebook, TRUE);
-    gtk_box_pack_start(GTK_BOX(vbox), notebook, TRUE, TRUE, 0);
+    gtk_stack_add_titled(GTK_STACK(stack), build_control(), "control", "Lights");
+    gtk_stack_add_titled(GTK_STACK(stack), build_patterns(), "patterns", "Patterns");
+    gtk_stack_add_titled(GTK_STACK(stack), build_notify(), "notify", "Notifications");
+    gtk_stack_add_titled(GTK_STACK(stack), build_settings(), "settings", "Settings");
 
-    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), build_control(), gtk_label_new("Control"));
-    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), build_patterns(), gtk_label_new("Patterns"));
-    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), build_notify(), gtk_label_new("Notifications"));
-    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), build_settings(), gtk_label_new("Settings"));
+    GtkWidget *switcher = gtk_stack_switcher_new();
+    gtk_stack_switcher_set_stack(GTK_STACK_SWITCHER(switcher), GTK_STACK(stack));
+    gtk_header_bar_set_custom_title(GTK_HEADER_BAR(header), switcher);
 
     statusbar = gtk_statusbar_new();
     status_ctx = gtk_statusbar_get_context_id(GTK_STATUSBAR(statusbar), "main");
@@ -638,29 +808,43 @@ int main(int argc, char **argv) {
 
     load_selections();
 
-    /* Prefer a dark theme, but never override text/background colors:
-       using the theme's own colours keeps labels readable. */
-    GtkSettings *settings = gtk_settings_get_default();
-    if (settings)
-        g_object_set(settings, "gtk-application-prefer-dark-theme", TRUE, NULL);
-
-    /* Clean, theme-aware spacing and rounding. */
     GtkCssProvider *provider = gtk_css_provider_new();
     gtk_css_provider_load_from_data(provider,
-        "notebook > header > tabs > tab { padding: 8px 18px; }"
-        "button { padding: 6px 16px; border-radius: 8px; }"
+        "headerbar { min-height: 48px; }"
+        "stackswitcher > button { border-radius: 9px; padding: 5px 16px; }"
+        "button { border-radius: 9px; padding: 6px 14px; }"
         "entry, spinbutton, combobox button { min-height: 30px; border-radius: 8px; }"
-        "frame > border { border-radius: 10px; }"
+        ".card { background-color: alpha(@theme_fg_color, 0.055);"
+        "        border: 1px solid alpha(@theme_fg_color, 0.09);"
+        "        border-radius: 14px; padding: 4px; }"
+        ".page-title { font-size: 19pt; font-weight: 800; }"
+        ".page-subtitle { color: alpha(@theme_fg_color, 0.62); font-size: 10.5pt; }"
+        ".section-title { font-size: 9pt; font-weight: 700; color: alpha(@theme_fg_color, 0.66); }"
+        ".dim { color: alpha(@theme_fg_color, 0.6); }"
+        ".led-name { font-weight: 600; }"
+        ".chip { border-radius: 999px; padding: 5px 12px; }"
+        ".chip:checked { background-color: alpha(@theme_selected_bg_color, 0.24);"
+        "                border-color: alpha(@theme_selected_bg_color, 0.85); }"
+        ".status-pill { border-radius: 999px; padding: 3px 12px;"
+        "               background-color: alpha(@theme_fg_color, 0.08);"
+        "               color: alpha(@theme_fg_color, 0.75); font-size: 9pt; }"
         "scale trough { min-height: 6px; border-radius: 3px; }"
         "scale highlight { border-radius: 3px; }"
+        "scale slider { min-width: 16px; min-height: 16px; }"
         "switch { border-radius: 14px; }"
-        "statusbar { padding: 4px 10px; }",
+        "separator { background-color: alpha(@theme_fg_color, 0.07); min-height: 1px; }"
+        "statusbar { border-top: 1px solid alpha(@theme_fg_color, 0.08); font-size: 9pt; padding: 3px 10px; }",
         -1, NULL);
     gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),
         GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
     g_object_unref(provider);
 
     gtk_widget_show_all(window);
+
+    const char *start_page = getenv("BLINKPAD_PAGE");
+    if (start_page)
+        gtk_stack_set_visible_child_name(GTK_STACK(stack), start_page);
+
     gtk_main();
     return 0;
 }
