@@ -565,7 +565,9 @@ int main(int argc, char **argv) {
 
     window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "Blinkpad");
-    gtk_window_set_default_size(GTK_WINDOW(window), 720, 520);
+    gtk_window_set_default_size(GTK_WINDOW(window), 820, 600);
+    gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
+    gtk_widget_set_size_request(window, 640, 480);
     g_signal_connect(window, "destroy", G_CALLBACK(on_destroy), NULL);
 
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
