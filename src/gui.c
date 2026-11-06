@@ -166,6 +166,8 @@ static GtkWidget *build_control(void) {
     gtk_grid_attach(GTK_GRID(grid), btnbox, 0, nleds + 1, 4, 1);
 
     GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
+    gtk_widget_set_hexpand(scrolled, TRUE);
+    gtk_widget_set_vexpand(scrolled, TRUE);
     gtk_container_add(GTK_CONTAINER(scrolled), grid);
     return scrolled;
 }
@@ -238,6 +240,8 @@ static void select_all_cb(GtkWidget *w, gpointer d) {
 
 static GtkWidget *build_patterns(void) {
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_set_hexpand(box, TRUE);
+    gtk_widget_set_vexpand(box, TRUE);
     gtk_widget_set_margin_start(box, 12); gtk_widget_set_margin_end(box, 12);
     gtk_widget_set_margin_top(box, 12); gtk_widget_set_margin_bottom(box, 12);
 
@@ -391,6 +395,8 @@ static void toggle_daemon_cb(GtkWidget *w, gpointer d) {
 
 static GtkWidget *build_notify(void) {
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_set_hexpand(box, TRUE);
+    gtk_widget_set_vexpand(box, TRUE);
     gtk_widget_set_margin_start(box, 12); gtk_widget_set_margin_end(box, 12);
     gtk_widget_set_margin_top(box, 12); gtk_widget_set_margin_bottom(box, 12);
 
@@ -442,6 +448,8 @@ static void fix_perms_cb(GtkWidget *w, gpointer d) {
 
 static GtkWidget *build_settings(void) {
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_set_hexpand(box, TRUE);
+    gtk_widget_set_vexpand(box, TRUE);
     gtk_widget_set_margin_start(box, 12); gtk_widget_set_margin_end(box, 12);
     gtk_widget_set_margin_top(box, 12); gtk_widget_set_margin_bottom(box, 12);
 
@@ -576,11 +584,15 @@ int main(int argc, char **argv) {
     g_signal_connect(window, "destroy", G_CALLBACK(on_destroy), NULL);
 
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    gtk_widget_set_hexpand(vbox, TRUE);
+    gtk_widget_set_vexpand(vbox, TRUE);
     gtk_container_add(GTK_CONTAINER(window), vbox);
 
     /* header? just title already */
 
     GtkWidget *notebook = gtk_notebook_new();
+    gtk_widget_set_hexpand(notebook, TRUE);
+    gtk_widget_set_vexpand(notebook, TRUE);
     gtk_box_pack_start(GTK_BOX(vbox), notebook, TRUE, TRUE, 0);
 
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), build_control(), gtk_label_new("Control"));
