@@ -640,6 +640,170 @@ static void fix_perms_cb(GtkWidget *w, gpointer d) {
     status_msg(msg);
 }
 
+static void copy_cmd_cb(GtkWidget *w, gpointer d) {
+    (void)d;
+    const char *cmd = g_object_get_data(G_OBJECT(w), "cmd");
+    if (!cmd) return;
+    GtkClipboard *cb = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
+    gtk_clipboard_set_text(cb, cmd, -1);
+    status_msg("Command copied to clipboard");
+}
+
+/* One terminal command with a short explanation and a copy button. */
+static GtkWidget *cmd_row(const char *cmd, const char *desc) {
+    GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_widget_set_margin_top(row, 2);
+    gtk_widget_set_margin_bottom(row, 2);
+
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_widget_set_hexpand(box, TRUE);
+
+    GtkWidget *lbl = gtk_label_new(cmd);
+    add_class(lbl, "cmd");
+    gtk_label_set_selectable(GTK_LABEL(lbl), TRUE);
+    gtk_label_set_xalign(GTK_LABEL(lbl), 0.0f);
+    gtk_label_set_line_wrap(GTK_LABEL(lbl), TRUE);
+    gtk_box_pack_start(GTK_BOX(box), lbl, FALSE, FALSE, 0);
+
+    if (desc) {
+        GtkWidget *d = gtk_label_new(desc);
+        add_class(d, "dim");
+        gtk_label_set_xalign(GTK_LABEL(d), 0.0f);
+        gtk_label_set_line_wrap(GTK_LABEL(d), TRUE);
+        gtk_box_pack_start(GTK_BOX(box), d, FALSE, FALSE, 0);
+    }
+    gtk_box_pack_start(GTK_BOX(row), box, TRUE, TRUE, 0);
+
+    GtkWidget *copy = gtk_button_new_from_icon_name("edit-copy-symbolic",
+                                                    GTK_ICON_SIZE_BUTTON);
+    add_class(copy, "flat");
+    gtk_widget_set_tooltip_text(copy, "Copy command");
+    gtk_widget_set_valign(copy, GTK_ALIGN_START);
+    g_object_set_data_full(G_OBJECT(copy), "cmd", g_strdup(cmd), g_free);
+    g_signal_connect(copy, "clicked", G_CALLBACK(copy_cmd_cb), NULL);
+    gtk_box_pack_end(GTK_BOX(row), copy, FALSE, FALSE, 0);
+
+    return row;
+}
+
+/* A titled card holding a group of terminal commands. */
+static GtkWidget *cmd_card(const char *title, const char *hint) {
+    GtkWidget *card = card_new();
+    GtkWidget *wrap = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    gtk_widget_set_margin_start(wrap, 12); gtk_widget_set_margin_end(wrap, 12);
+    gtk_widget_set_margin_top(wrap, 12); gtk_widget_set_margin_bottom(wrap, 12);
+    gtk_box_pack_start(GTK_BOX(wrap), section_label(title), FALSE, FALSE, 0);
+    if (hint) {
+        GtkWidget *h = gtk_label_new(hint);
+        add_class(h, "dim");
+        gtk_label_set_xalign(GTK_LABEL(h), 0.0f);
+        gtk_label_set_line_wrap(GTK_LABEL(h), TRUE);
+        gtk_box_pack_start(GTK_BOX(wrap), h, FALSE, FALSE, 0);
+    }
+    gtk_box_pack_start(GTK_BOX(card), wrap, FALSE, FALSE, 0);
+    g_object_set_data(G_OBJECT(card), "wrap", wrap);
+    return card;
+}
+
+static void cmd_card_add(GtkWidget *card, const char *cmd, const char *desc) {
+    GtkWidget *wrap = g_object_get_data(G_OBJECT(card), "wrap");
+    gtk_box_pack_start(GTK_BOX(wrap), cmd_row(cmd, desc), FALSE, FALSE, 0);
+}
+
+static GtkWidget *build_commands(void) {
+    GtkWidget *page = page_new();
+    gtk_box_pack_start(GTK_BOX(page), title_block("Terminal",
+        "Every Blinkpad action is also available from the command line."), FALSE, FALSE, 0);
+
+    GtkWidget *basics = cmd_card("BASICS", "Run these from any terminal. The binary is called blinkpad.");
+    cmd_card_add(basics, "blinkpad list",
+        "Show every detected LED with its current value and kernel trigger.");
+    cmd_card_add(basics, "blinkpad --version",
+        "Print the installed version.");
+    cmd_card_add(basics, "blinkpad ensure-permissions",
+        "Grant write access to the LED sysfs entries (run once if lights cannot be changed).");
+    gtk_box_pack_start(GTK_BOX(page), basics, FALSE, FALSE, 0);
+
+    GtkWidget *lights = cmd_card("LIGHTS", "Turn an individual light on, off, or to a specific brightness.");
+    cmd_card_add(lights, "blinkpad set <led> max",
+        "Turn a light on at its maximum value.");
+    cmd_card_add(lights, "blinkpad set <led> 0",
+        "Turn a light off.");
+    cmd_card_add(lights, "blinkpad set kbd_backlight 1",
+        "Set a specific brightness (the keyboard backlight supports 0-2).");
+    cmd_card_add(lights, "blinkpad get <led>",
+        "Read the current brightness value.");
+    cmd_card_add(lights, "blinkpad trigger <led>",
+        "Print the light's current kernel trigger.");
+    cmd_card_add(lights, "blinkpad trigger <led> none",
+        "Set a kernel trigger (for example none, audio-mute, or default-on).");
+    cmd_card_add(lights, "blinkpad off",
+        "Turn every light off (the mute LEDs are preserved).");
+    cmd_card_add(lights, "blinkpad off --leds power,lid_logo",
+        "Turn off only the listed lights.");
+    gtk_box_pack_start(GTK_BOX(page), lights, FALSE, FALSE, 0);
+
+    GtkWidget *names = cmd_card("LED NAMES",
+        "Use these names with set, get, trigger, --leds, and the pattern commands.");
+    for (int i = 0; i < nleds; i++) {
+        char cmd[160];
+        snprintf(cmd, sizeof(cmd), "blinkpad set %s max", leds[i].friendly);
+        char desc[192];
+        snprintf(desc, sizeof(desc), "%s  ·  max %d", led_display_name(i), led_max(i));
+        cmd_card_add(names, cmd, desc);
+    }
+    gtk_box_pack_start(GTK_BOX(page), names, FALSE, FALSE, 0);
+
+    GtkWidget *patterns = cmd_card("PATTERNS",
+        "Patterns: off, solid, blink, strobe, pulse, heartbeat, chase, cylon, wave, sos, notification. "
+        "Stop with Ctrl+C; the original light state is restored on exit.");
+    cmd_card_add(patterns, "blinkpad pattern blink --leds power",
+        "Blink a single light.");
+    cmd_card_add(patterns, "blinkpad pattern pulse --leds kbd_backlight --freq 0.5",
+        "Pulse the keyboard backlight (one cycle every two seconds).");
+    cmd_card_add(patterns, "blinkpad pattern chase --leds power,standby,lid_logo",
+        "Chase across several lights in order.");
+    cmd_card_add(patterns, "blinkpad pattern cylon --leds power,standby --step 0.15",
+        "Sweep back and forth; lower step values move faster.");
+    cmd_card_add(patterns, "blinkpad pattern heartbeat --leds power --level 0.5",
+        "Heartbeat at half brightness.");
+    cmd_card_add(patterns, "blinkpad pattern notification --leds power --count 3 --interval 0.15",
+        "A notification-style triple flash.");
+    cmd_card_add(patterns, "blinkpad pattern blink --speed 2 --duty 0.3",
+        "Tune any pattern with --speed, --freq/--rate, --step, --level, --duty, --unit, --count, or --interval.");
+    cmd_card_add(patterns, "blinkpad pattern sos --leds power --no-restore",
+        "Run SOS without restoring the previous light state on exit.");
+    gtk_box_pack_start(GTK_BOX(page), patterns, FALSE, FALSE, 0);
+
+    GtkWidget *flash = cmd_card("FLASH",
+        "Quick one-off flashes for scripts and shortcuts.");
+    cmd_card_add(flash, "blinkpad flash",
+        "Flash the ThinkVantage light four times.");
+    cmd_card_add(flash, "blinkpad flash --leds power,lid_logo --count 6 --interval 0.08",
+        "Flash several lights with a custom count and interval.");
+    gtk_box_pack_start(GTK_BOX(page), flash, FALSE, FALSE, 0);
+
+    GtkWidget *notify = cmd_card("NOTIFICATIONS",
+        "Flash lights whenever a desktop notification arrives. Stop with Ctrl+C.");
+    cmd_card_add(notify, "blinkpad daemon",
+        "Watch for notifications and flash the ThinkVantage light.");
+    cmd_card_add(notify, "blinkpad daemon --leds power --count 4 --interval 0.1",
+        "Flash a different light, or several comma-separated lights, per notification.");
+    gtk_box_pack_start(GTK_BOX(page), notify, FALSE, FALSE, 0);
+
+    GtkWidget *hide = cmd_card("HIDDEN LIGHTS",
+        "Hide LEDs you never use; the GUI will stop showing them.");
+    cmd_card_add(hide, "blinkpad hide thinkvantage",
+        "Hide a light (restart the app to apply).");
+    cmd_card_add(hide, "blinkpad show thinkvantage",
+        "Show a hidden light again.");
+    cmd_card_add(hide, "blinkpad hidden",
+        "List the currently hidden lights.");
+    gtk_box_pack_start(GTK_BOX(page), hide, FALSE, FALSE, 0);
+
+    return page_scroll(page);
+}
+
 static GtkWidget *build_settings(void) {
     GtkWidget *page = page_new();
     gtk_box_pack_start(GTK_BOX(page), title_block("Settings",
@@ -668,7 +832,7 @@ static GtkWidget *build_settings(void) {
     gtk_widget_set_margin_top(aboutwrap, 12); gtk_widget_set_margin_bottom(aboutwrap, 12);
     gtk_box_pack_start(GTK_BOX(aboutwrap), section_label("ABOUT"), FALSE, FALSE, 0);
     GtkWidget *name = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(name), "<b>Blinkpad</b>  ·  1.4.1");
+    gtk_label_set_markup(GTK_LABEL(name), "<b>Blinkpad</b>  ·  1.5.0");
     gtk_widget_set_halign(name, GTK_ALIGN_START);
     gtk_box_pack_start(GTK_BOX(aboutwrap), name, FALSE, FALSE, 0);
     GtkWidget *desc = gtk_label_new("Native C / GTK3 control for monochrome ThinkPad LEDs.");
@@ -884,6 +1048,7 @@ int main(int argc, char **argv) {
     gtk_stack_add_titled(GTK_STACK(stack), build_control(), "control", "Lights");
     gtk_stack_add_titled(GTK_STACK(stack), build_patterns(), "patterns", "Patterns");
     gtk_stack_add_titled(GTK_STACK(stack), build_notify(), "notify", "Notifications");
+    gtk_stack_add_titled(GTK_STACK(stack), build_commands(), "commands", "Commands");
     gtk_stack_add_titled(GTK_STACK(stack), build_settings(), "settings", "Settings");
 
     GtkWidget *switcher = gtk_stack_switcher_new();
@@ -909,6 +1074,8 @@ int main(int argc, char **argv) {
         ".page-subtitle { color: alpha(@theme_fg_color, 0.62); font-size: 10.5pt; }"
         ".section-title { font-size: 9pt; font-weight: 700; color: alpha(@theme_fg_color, 0.66); }"
         ".dim { color: alpha(@theme_fg_color, 0.6); }"
+        ".cmd { font-family: monospace; font-size: 9.5pt; padding: 4px 8px;"
+        "       border-radius: 6px; background-color: alpha(@theme_fg_color, 0.07); }"
         ".led-name { font-weight: 600; }"
         ".chip { border-radius: 999px; padding: 5px 12px; }"
         ".chip:checked { background-color: alpha(@theme_selected_bg_color, 0.24);"
