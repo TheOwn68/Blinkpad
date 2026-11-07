@@ -208,6 +208,9 @@ static void on_scale_changed(GtkRange *r, gpointer data) {
 
 static gboolean on_switch_state_set(GtkSwitch *sw, gboolean state, gpointer data) {
     LedRow *row = (LedRow *)data;
+    const char *trig = led_trigger(row->idx);
+    if (strcmp(trig, "none") != 0)
+        status_msg("This light follows a kernel trigger — choose “none” in its menu for manual control");
     if (state) {
         int v;
         if (row->scale) {
@@ -344,7 +347,8 @@ static GtkWidget *build_control(void) {
     }
     gtk_box_pack_start(GTK_BOX(page), card, FALSE, FALSE, 0);
 
-    GtkWidget *hint = gtk_label_new("Tip: the trigger controls kernel-driven blinking. Leave it on “none” for manual control.");
+    GtkWidget *hint = gtk_label_new("Tip: a trigger lets the kernel drive the light (for example audio-mute follows the mute state). "
+                                    "Choose “none” for manual control. Blinkpad never changes audio or lock state itself.");
     add_class(hint, "dim");
     gtk_widget_set_halign(hint, GTK_ALIGN_START);
     gtk_label_set_line_wrap(GTK_LABEL(hint), TRUE);
@@ -736,12 +740,33 @@ static GtkWidget *build_commands(void) {
     cmd_card_add(lights, "blinkpad trigger <led>",
         "Print the light's current kernel trigger.");
     cmd_card_add(lights, "blinkpad trigger <led> none",
-        "Set a kernel trigger (for example none, audio-mute, or default-on).");
+        "Set a kernel trigger (for example none, audio-mute, or default).");
     cmd_card_add(lights, "blinkpad off",
         "Turn every light off (the mute LEDs are preserved).");
     cmd_card_add(lights, "blinkpad off --leds power,lid_logo",
         "Turn off only the listed lights.");
     gtk_box_pack_start(GTK_BOX(page), lights, FALSE, FALSE, 0);
+
+    GtkWidget *triggers = cmd_card("TRIGGERS",
+        "A kernel trigger makes a light follow an event. 'none' means Blinkpad controls it manually. "
+        "Shortcuts: manual/off, caps, num, scroll, mute, mic, ac, charging, full, battery, disk.");
+    cmd_card_add(triggers, "blinkpad triggers",
+        "Show the active trigger for every light, plus a suggested trigger for each.");
+    cmd_card_add(triggers, "blinkpad triggers capslock",
+        "List every trigger that light supports, with a description for the useful ones.");
+    cmd_card_add(triggers, "blinkpad trigger capslock caps",
+        "Bind the Caps Lock light to the Caps Lock key.");
+    cmd_card_add(triggers, "blinkpad trigger numlock num",
+        "Bind the Num Lock light to the Num Lock key.");
+    cmd_card_add(triggers, "blinkpad trigger mute mute",
+        "Follow the speaker mute state (audio-mute).");
+    cmd_card_add(triggers, "blinkpad trigger micmute mic",
+        "Follow the microphone mute state (audio-micmute).");
+    cmd_card_add(triggers, "blinkpad trigger power battery",
+        "Show the battery state (charging or full).");
+    cmd_card_add(triggers, "blinkpad trigger power none",
+        "Return the light to manual control from Blinkpad.");
+    gtk_box_pack_start(GTK_BOX(page), triggers, FALSE, FALSE, 0);
 
     GtkWidget *names = cmd_card("LED NAMES",
         "Use these names with set, get, trigger, --leds, and the pattern commands.");
@@ -832,7 +857,7 @@ static GtkWidget *build_settings(void) {
     gtk_widget_set_margin_top(aboutwrap, 12); gtk_widget_set_margin_bottom(aboutwrap, 12);
     gtk_box_pack_start(GTK_BOX(aboutwrap), section_label("ABOUT"), FALSE, FALSE, 0);
     GtkWidget *name = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(name), "<b>Blinkpad</b>  ·  1.3.0");
+    gtk_label_set_markup(GTK_LABEL(name), "<b>Blinkpad</b>  ·  1.3.1");
     gtk_widget_set_halign(name, GTK_ALIGN_START);
     gtk_box_pack_start(GTK_BOX(aboutwrap), name, FALSE, FALSE, 0);
     GtkWidget *desc = gtk_label_new("Native C / GTK3 control for monochrome ThinkPad LEDs.");

@@ -364,23 +364,32 @@ void restore_leds(int *indices, int n, int *vals) {
 }
 
 int ensure_permissions(void) {
-    /* check writable */
+    /* check writable (both brightness and trigger are needed) */
     int ok = 1;
     for (int i = 0; i < nleds; i++) {
-        if (access(led_path(leds[i].kernel, "brightness"), W_OK) != 0) { ok = 0; break; }
+        if (access(led_path(leds[i].kernel, "brightness"), W_OK) != 0 ||
+            access(led_path(leds[i].kernel, "trigger"), W_OK) != 0) { ok = 0; break; }
     }
     if (ok) return 1;
-    /* try pkexec chmod 0666 on all */
-    for (int i = 0; i < nleds; i++) {
-        char cmd[512];
-        snprintf(cmd, sizeof(cmd), "pkexec chmod 0666 %s %s 2>/dev/null",
-                 led_path(leds[i].kernel, "brightness"),
-                 led_path(leds[i].kernel, "trigger"));
-        system(cmd);
+
+    /* chmod every LED in one privileged command (one polkit prompt). */
+    size_t cap = 64 + (size_t)nleds * 2 * (PATH_LEN * 2 + 16);
+    char *cmd = malloc(cap);
+    if (!cmd) return 0;
+    size_t len = (size_t)snprintf(cmd, cap, "pkexec sh -c 'chmod 0666");
+    for (int i = 0; i < nleds && len < cap - 2; i++) {
+        len += (size_t)snprintf(cmd + len, cap - len, " '%s' '%s'",
+                                led_path(leds[i].kernel, "brightness"),
+                                led_path(leds[i].kernel, "trigger"));
     }
+    snprintf(cmd + len, cap - len, " 2>/dev/null'");
+    system(cmd);
+    free(cmd);
+
     ok = 1;
     for (int i = 0; i < nleds; i++) {
-        if (access(led_path(leds[i].kernel, "brightness"), W_OK) != 0) { ok = 0; break; }
+        if (access(led_path(leds[i].kernel, "brightness"), W_OK) != 0 ||
+            access(led_path(leds[i].kernel, "trigger"), W_OK) != 0) { ok = 0; break; }
     }
     return ok;
 }

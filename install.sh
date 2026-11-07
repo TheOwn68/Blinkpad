@@ -71,11 +71,28 @@ echo "User group: $GROUP"
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Make every LED attribute writable by the user's group, persistently.
+# This must include input*::capslock/numlock/scrolllock, not just the
+# ThinkPad-specific tpacpi:: and platform:: lights: input LEDs are
+# recreated with root-only permissions on every boot on Fedora.
+LED_GLOB="/sys/class/leds/*"
+
+if have udevadm; then
+    echo "Setting up udev rule permissions..."
+    RULE="/tmp/99-blinkpad.rules"
+    cat > "$RULE" <<EOF
+SUBSYSTEM=="leds", ACTION=="add|change", RUN+="/bin/sh -c 'chgrp $GROUP /sys/class/leds/%k/brightness /sys/class/leds/%k/trigger 2>/dev/null; chmod g+w /sys/class/leds/%k/brightness /sys/class/leds/%k/trigger 2>/dev/null'"
+EOF
+    run_root cp "$RULE" /etc/udev/rules.d/99-blinkpad.rules
+    run_root udevadm control --reload-rules || true
+    run_root udevadm trigger --subsystem-match=leds || true
+fi
+
 if have systemctl && have systemd-tmpfiles; then
     echo "Setting up systemd-tmpfiles permissions..."
     CONF="/tmp/blinkpad-tmpfiles.conf"
     : > "$CONF"
-    for led in $(ls -d /sys/class/leds/tpacpi::* /sys/class/leds/platform::* 2>/dev/null | sort -u); do
+    for led in $LED_GLOB; do
         [ -e "$led" ] || continue
         for attr in brightness trigger; do
             if [ -e "$led/$attr" ]; then
@@ -85,37 +102,18 @@ if have systemctl && have systemd-tmpfiles; then
     done
     run_root cp "$CONF" /etc/tmpfiles.d/blinkpad.conf
     run_root systemd-tmpfiles --create /etc/tmpfiles.d/blinkpad.conf
-elif have udevadm; then
-    echo "Setting up udev rule permissions..."
-    RULE="/tmp/99-blinkpad.rules"
-    cat > "$RULE" <<EOF
-SUBSYSTEM=="leds", KERNEL=="tpacpi::*", RUN+="/bin/chgrp $GROUP /sys/class/leds/%k/brightness", RUN+="/bin/chmod g+w /sys/class/leds/%k/brightness"
-SUBSYSTEM=="leds", KERNEL=="tpacpi::*", RUN+="/bin/chgrp $GROUP /sys/class/leds/%k/trigger", RUN+="/bin/chmod g+w /sys/class/leds/%k/trigger"
-SUBSYSTEM=="leds", KERNEL=="platform::*", RUN+="/bin/chgrp $GROUP /sys/class/leds/%k/brightness", RUN+="/bin/chmod g+w /sys/class/leds/%k/brightness"
-SUBSYSTEM=="leds", KERNEL=="platform::*", RUN+="/bin/chgrp $GROUP /sys/class/leds/%k/trigger", RUN+="/bin/chmod g+w /sys/class/leds/%k/trigger"
-EOF
-    run_root cp "$RULE" /etc/udev/rules.d/99-blinkpad.rules
-    run_root udevadm control --reload-rules || true
-    run_root udevadm trigger --subsystem-match=leds || true
-    for led in /sys/class/leds/tpacpi::* /sys/class/leds/platform::*; do
-        [ -e "$led" ] || continue
-        for attr in brightness trigger; do
-            if [ -e "$led/$attr" ]; then
-                run_root chgrp "$GROUP" "$led/$attr" || true
-                run_root chmod g+w "$led/$attr" || true
-            fi
-        done
+fi
+
+# Apply immediately too, in one privileged command.
+ATTRS=""
+for led in $LED_GLOB; do
+    [ -e "$led" ] || continue
+    for attr in brightness trigger; do
+        [ -e "$led/$attr" ] && ATTRS="$ATTRS $led/$attr"
     done
-else
-    echo "No systemd/udev detected. chmod 0666 now (not persistent)."
-    for led in /sys/class/leds/tpacpi::* /sys/class/leds/platform::*; do
-        [ -e "$led" ] || continue
-        for attr in brightness trigger; do
-            if [ -e "$led/$attr" ]; then
-                run_root chmod 0666 "$led/$attr" || true
-            fi
-        done
-    done
+done
+if [ -n "$ATTRS" ]; then
+    run_root sh -c "chgrp '$GROUP' $ATTRS 2>/dev/null; chmod g+w $ATTRS 2>/dev/null" || true
 fi
 
 if have systemctl; then

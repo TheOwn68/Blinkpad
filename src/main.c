@@ -43,15 +43,150 @@ static void cmd_get(const char *name) {
     printf("%d\n", led_get(idx));
 }
 
-static void cmd_trigger(const char *name, const char *trig) {
+/* ---------- trigger helpers ---------- */
+
+typedef struct {
+    const char *name;
+    const char *desc;
+    const char *alias;
+} TriggerHelp;
+
+static const TriggerHelp trigger_help[] = {
+    {"none",             "manual control (Blinkpad writes the brightness)", "manual"},
+    {"default",          "the kernel's default state for this light",       NULL},
+    {"kbd-capslock",     "follow the Caps Lock key",                        "caps"},
+    {"kbd-numlock",      "follow the Num Lock key",                         "num"},
+    {"kbd-scrolllock",   "follow the Scroll Lock key",                      "scroll"},
+    {"audio-mute",       "follow the speaker mute state",                   "mute"},
+    {"audio-micmute",    "follow the microphone mute state",                "mic"},
+    {"AC-online",        "on while AC power is connected",                  "ac"},
+    {"BAT0-charging",    "on while the battery is charging",                "charging"},
+    {"BAT0-full",        "on when the battery is full",                     "full"},
+    {"BAT0-charging-or-full", "on while charging or full",                  "battery"},
+    {"BAT0-charging-blink-full-solid", "blink while charging, solid when full", NULL},
+    {"disk-activity",    "flicker on disk activity",                        "disk"},
+    {"disk-read",        "flicker on disk reads",                           NULL},
+    {"disk-write",       "flicker on disk writes",                          NULL},
+    {"cpu",              "on while any CPU is busy",                        NULL},
+    {"panic",            "blink on a kernel panic",                         NULL},
+    {"rfkill-any",       "on when any radio is blocked",                    NULL},
+    {"bluetooth-power",  "on while Bluetooth is powered",                   NULL},
+};
+
+static const char *trigger_alias(const char *name) {
+    for (size_t i = 0; i < sizeof(trigger_help) / sizeof(trigger_help[0]); i++) {
+        if (strcmp(name, trigger_help[i].name) == 0) return trigger_help[i].name;
+        if (trigger_help[i].alias && strcmp(name, trigger_help[i].alias) == 0)
+            return trigger_help[i].name;
+    }
+    if (strcmp(name, "off") == 0) return "none";
+    return name;
+}
+
+static const char *trigger_description(const char *name) {
+    for (size_t i = 0; i < sizeof(trigger_help) / sizeof(trigger_help[0]); i++)
+        if (strcmp(name, trigger_help[i].name) == 0) return trigger_help[i].desc;
+    return NULL;
+}
+
+static int trigger_available(int idx, const char *name) {
+    int n = 0;
+    char **list = led_triggers(idx, &n);
+    if (!list) return 0;
+    int found = 0;
+    for (int i = 0; i < n; i++) {
+        if (strcmp(list[i], name) == 0) found = 1;
+        free(list[i]);
+    }
+    free(list);
+    return found;
+}
+
+/* A trigger that makes sense for the way this light is normally used. */
+static const char *suggested_trigger(int idx) {
+    const char *f = leds[idx].friendly;
+    if (strcmp(f, "capslock") == 0) return "kbd-capslock";
+    if (strcmp(f, "numlock") == 0) return "kbd-numlock";
+    if (strcmp(f, "scrolllock") == 0) return "kbd-scrolllock";
+    if (strcmp(f, "mute") == 0) return "audio-mute";
+    if (strcmp(f, "micmute") == 0) return "audio-micmute";
+    return NULL;
+}
+
+static void cmd_triggers_list(void) {
+    printf("%-18s %-30s %s\n", "LED", "ACTIVE", "SUGGESTED");
+    for (int i = 0; i < nleds; i++) {
+        const char *sug = suggested_trigger(i);
+        printf("%-18s %-30s %s\n", leds[i].friendly, led_trigger(i), sug ? sug : "-");
+    }
+    printf("\nSet one:    blinkpad trigger <led> <trigger>\n"
+           "See choices: blinkpad triggers <led>\n"
+           "Use 'none' for manual control from Blinkpad.\n");
+}
+
+static void cmd_triggers_led(const char *name) {
     int idx = find_led_by_name(name);
-    if (idx < 0) { fprintf(stderr, "unknown led\n"); exit(1); }
+    if (idx < 0) { fprintf(stderr, "unknown led %s\n", name); exit(1); }
+
+    const char *active = led_trigger(idx);
+    printf("%s: active trigger is %s\n\n", name, active);
+
+    int n = 0;
+    char **list = led_triggers(idx, &n);
+    if (!list || n == 0) {
+        printf("No triggers available.\n");
+        free(list);
+        return;
+    }
+
+    printf("Available triggers:\n");
+    for (int i = 0; i < n; i++) {
+        const char *desc = trigger_description(list[i]);
+        printf("  %s %-30s %s\n",
+               strcmp(list[i], active) == 0 ? "*" : " ",
+               list[i], desc ? desc : "");
+        free(list[i]);
+    }
+    free(list);
+
+    printf("\nShortcuts for the trigger argument:\n"
+           "  manual/off=none  caps=kbd-capslock  num=kbd-numlock  scroll=kbd-scrolllock\n"
+           "  mute=audio-mute  mic=audio-micmute  ac=AC-online\n"
+           "  charging=BAT0-charging  full=BAT0-full  battery=BAT0-charging-or-full\n"
+           "  disk=disk-activity\n"
+           "\nExample: blinkpad trigger %s %s\n",
+           name, (strcmp(name, "capslock") == 0) ? "caps" :
+                 (strcmp(name, "numlock") == 0) ? "num" :
+                 (strcmp(name, "scrolllock") == 0) ? "scroll" :
+                 (strcmp(name, "mute") == 0) ? "mute" :
+                 (strcmp(name, "micmute") == 0) ? "mic" : "none");
+}
+
+static int cmd_trigger(const char *name, const char *trig) {
+    int idx = find_led_by_name(name);
+    if (idx < 0) { fprintf(stderr, "unknown led %s\n", name); exit(1); }
     if (!trig) {
         printf("%s\n", led_trigger(idx));
-    } else {
-        led_set_trigger(idx, trig);
-        printf("%s trigger -> %s\n", name, trig);
+        return 0;
     }
+
+    const char *real = trigger_alias(trig);
+    if (!trigger_available(idx, real)) {
+        fprintf(stderr, "%s does not support trigger '%s'\n", name, trig);
+        fprintf(stderr, "run 'blinkpad triggers %s' to see the available triggers\n", name);
+        return 1;
+    }
+
+    led_set_trigger(idx, real);
+    const char *now = led_trigger(idx);
+    if (strcmp(now, real) != 0) {
+        fprintf(stderr, "could not set trigger (permissions? try 'blinkpad ensure-permissions')\n");
+        return 1;
+    }
+    printf("%s trigger -> %s\n", name, now);
+    if (strcmp(real, "none") != 0)
+        printf("Note: an active trigger controls the light; use 'none' to control it manually.\n");
+    return 0;
 }
 
 int main(int argc, char **argv) {
@@ -65,7 +200,7 @@ int main(int argc, char **argv) {
         }
     }
     if (argc == 2 && strcmp(argv[1], "--version") == 0) {
-        printf("Blinkpad 1.3.0\n");
+        printf("Blinkpad 1.3.1\n");
         return 0;
     }
     if (argc < 2) {
@@ -81,9 +216,12 @@ int main(int argc, char **argv) {
     } else if (strcmp(cmd, "get") == 0) {
         if (argc < 3) { fprintf(stderr, "get <led>\n"); return 1; }
         cmd_get(argv[2]);
+    } else if (strcmp(cmd, "triggers") == 0) {
+        if (argc >= 3) cmd_triggers_led(argv[2]);
+        else cmd_triggers_list();
     } else if (strcmp(cmd, "trigger") == 0) {
         if (argc < 3) { fprintf(stderr, "trigger <led> [trigger]\n"); return 1; }
-        cmd_trigger(argv[2], argc >= 4 ? argv[3] : NULL);
+        return cmd_trigger(argv[2], argc >= 4 ? argv[3] : NULL);
     } else if (strcmp(cmd, "ensure-permissions") == 0) {
         int ok = ensure_permissions();
         printf("writable: %s\n", ok ? "yes" : "no");
