@@ -174,7 +174,8 @@ static void all_off_cb(GtkWidget *w, gpointer d) {
     all_off(indices, ni);
     for (int i = 0; i < nled_rows; i++) {
         if (is_mute_led(led_rows[i].idx)) continue;
-        gtk_range_set_value(GTK_RANGE(led_rows[i].scale), 0);
+        if (led_rows[i].scale)
+            gtk_range_set_value(GTK_RANGE(led_rows[i].scale), 0);
         gtk_switch_set_active(GTK_SWITCH(led_rows[i].sw), FALSE);
     }
     status_msg("All lights off (mute LEDs preserved)");
@@ -187,7 +188,8 @@ static void all_max_cb(GtkWidget *w, gpointer d) {
     }
     for (int i = 0; i < nled_rows; i++) {
         if (is_mute_led(led_rows[i].idx)) continue;
-        gtk_range_set_value(GTK_RANGE(led_rows[i].scale), led_max(led_rows[i].idx));
+        if (led_rows[i].scale)
+            gtk_range_set_value(GTK_RANGE(led_rows[i].scale), led_max(led_rows[i].idx));
         gtk_switch_set_active(GTK_SWITCH(led_rows[i].sw), TRUE);
     }
     status_msg("All lights at maximum (mute LEDs preserved)");
@@ -207,8 +209,13 @@ static void on_scale_changed(GtkRange *r, gpointer data) {
 static gboolean on_switch_state_set(GtkSwitch *sw, gboolean state, gpointer data) {
     LedRow *row = (LedRow *)data;
     if (state) {
-        int v = (int)gtk_range_get_value(GTK_RANGE(row->scale));
-        if (v == 0) { v = led_max(row->idx); gtk_range_set_value(GTK_RANGE(row->scale), v); }
+        int v;
+        if (row->scale) {
+            v = (int)gtk_range_get_value(GTK_RANGE(row->scale));
+            if (v == 0) { v = led_max(row->idx); gtk_range_set_value(GTK_RANGE(row->scale), v); }
+        } else {
+            v = led_max(row->idx);
+        }
         led_set(row->idx, v);
     } else {
         led_set(row->idx, 0);
@@ -241,22 +248,40 @@ static GtkWidget *build_led_row(int i) {
     gtk_label_set_ellipsize(GTK_LABEL(lbl), PANGO_ELLIPSIZE_END);
     gtk_grid_attach(GTK_GRID(grid), lbl, 1, 0, 1, 1);
 
-    GtkAdjustment *adj = gtk_adjustment_new(led_get(i), 0, led_max(i), 1, 1, 0);
-    GtkWidget *scale = gtk_scale_new(GTK_ORIENTATION_HORIZONTAL, adj);
-    gtk_scale_set_digits(GTK_SCALE(scale), 0);
-    gtk_scale_set_draw_value(GTK_SCALE(scale), FALSE);
-    gtk_widget_set_hexpand(scale, TRUE);
-    gtk_widget_set_valign(scale, GTK_ALIGN_CENTER);
-    gtk_grid_attach(GTK_GRID(grid), scale, 2, 0, 1, 1);
+    /* ThinkPad status LEDs expose 0-255 but are on/off only; only the
+       keyboard backlight has real brightness levels. */
+    int maxb = led_max(i);
+    int dimmable = (strcmp(leds[i].friendly, "kbd_backlight") == 0);
+    GtkWidget *scale = NULL;
+    GtkWidget *val = NULL;
 
-    char vbuf[16];
-    snprintf(vbuf, sizeof(vbuf), "%d", led_get(i));
-    GtkWidget *val = gtk_label_new(vbuf);
-    add_class(val, "dim");
-    gtk_widget_set_size_request(val, 22, -1);
-    gtk_widget_set_halign(val, GTK_ALIGN_END);
-    gtk_widget_set_valign(val, GTK_ALIGN_CENTER);
-    gtk_grid_attach(GTK_GRID(grid), val, 3, 0, 1, 1);
+    if (dimmable) {
+        GtkAdjustment *adj = gtk_adjustment_new(led_get(i), 0, maxb, 1, 1, 0);
+        scale = gtk_scale_new(GTK_ORIENTATION_HORIZONTAL, adj);
+        gtk_scale_set_digits(GTK_SCALE(scale), 0);
+        gtk_scale_set_draw_value(GTK_SCALE(scale), FALSE);
+        gtk_widget_set_hexpand(scale, FALSE);
+        gtk_widget_set_size_request(scale, 160, -1);
+        gtk_widget_set_valign(scale, GTK_ALIGN_CENTER);
+        gtk_grid_attach(GTK_GRID(grid), scale, 2, 0, 1, 1);
+
+        char vbuf[16];
+        snprintf(vbuf, sizeof(vbuf), "%d", led_get(i));
+        val = gtk_label_new(vbuf);
+        add_class(val, "dim");
+        gtk_widget_set_size_request(val, 22, -1);
+        gtk_widget_set_halign(val, GTK_ALIGN_END);
+        gtk_widget_set_valign(val, GTK_ALIGN_CENTER);
+        gtk_grid_attach(GTK_GRID(grid), val, 3, 0, 1, 1);
+    } else {
+        /* Keep switches and trigger menus aligned across all rows. */
+        GtkWidget *gap = gtk_label_new(NULL);
+        gtk_widget_set_size_request(gap, 160, 1);
+        gtk_grid_attach(GTK_GRID(grid), gap, 2, 0, 1, 1);
+        GtkWidget *gap2 = gtk_label_new(NULL);
+        gtk_widget_set_size_request(gap2, 22, 1);
+        gtk_grid_attach(GTK_GRID(grid), gap2, 3, 0, 1, 1);
+    }
 
     GtkWidget *sw = gtk_switch_new();
     gtk_switch_set_active(GTK_SWITCH(sw), led_get(i) > 0);
@@ -283,7 +308,8 @@ static GtkWidget *build_led_row(int i) {
     row->combo = combo;
     row->value = val;
 
-    g_signal_connect(scale, "value-changed", G_CALLBACK(on_scale_changed), row);
+    if (scale)
+        g_signal_connect(scale, "value-changed", G_CALLBACK(on_scale_changed), row);
     g_signal_connect(sw, "state-set", G_CALLBACK(on_switch_state_set), row);
     g_signal_connect(combo, "changed", G_CALLBACK(on_trigger_changed), row);
     return grid;
@@ -642,7 +668,7 @@ static GtkWidget *build_settings(void) {
     gtk_widget_set_margin_top(aboutwrap, 12); gtk_widget_set_margin_bottom(aboutwrap, 12);
     gtk_box_pack_start(GTK_BOX(aboutwrap), section_label("ABOUT"), FALSE, FALSE, 0);
     GtkWidget *name = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(name), "<b>Blinkpad</b>  ·  1.4.0");
+    gtk_label_set_markup(GTK_LABEL(name), "<b>Blinkpad</b>  ·  1.4.1");
     gtk_widget_set_halign(name, GTK_ALIGN_START);
     gtk_box_pack_start(GTK_BOX(aboutwrap), name, FALSE, FALSE, 0);
     GtkWidget *desc = gtk_label_new("Native C / GTK3 control for monochrome ThinkPad LEDs.");

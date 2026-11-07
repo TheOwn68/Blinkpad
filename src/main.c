@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
         }
     }
     if (argc == 2 && strcmp(argv[1], "--version") == 0) {
-        printf("Blinkpad 1.4.0\n");
+        printf("Blinkpad 1.4.1\n");
         return 0;
     }
     if (argc < 2) {
