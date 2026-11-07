@@ -8,8 +8,8 @@ all: blinkpad blinkpad-gui
 blinkpad: src/common.h src/leds.c src/pattern.c src/main.c
 	$(CC) $(CFLAGS) $(PKG_CFLAGS) -o $@ src/leds.c src/pattern.c src/main.c $(PKG_LIBS)
 
-blinkpad-gui: src/common.h src/leds.c src/pattern.c src/gui.c
-	$(CC) $(CFLAGS) $(PKG_CFLAGS) -o $@ src/leds.c src/pattern.c src/gui.c $(PKG_LIBS)
+blinkpad-gui: src/common.h src/leds.c src/pattern.c src/gui.c src/tray.c src/tray.h
+	$(CC) $(CFLAGS) $(PKG_CFLAGS) -o $@ src/leds.c src/pattern.c src/gui.c src/tray.c $(PKG_LIBS)
 
 clean:
 	rm -f blinkpad blinkpad-gui

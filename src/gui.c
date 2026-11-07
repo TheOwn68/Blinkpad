@@ -1,4 +1,5 @@
 #include "common.h"
+#include "tray.h"
 #include <gtk/gtk.h>
 #include <glib.h>
 #include <gio/gio.h>
@@ -641,7 +642,7 @@ static GtkWidget *build_settings(void) {
     gtk_widget_set_margin_top(aboutwrap, 12); gtk_widget_set_margin_bottom(aboutwrap, 12);
     gtk_box_pack_start(GTK_BOX(aboutwrap), section_label("ABOUT"), FALSE, FALSE, 0);
     GtkWidget *name = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(name), "<b>Blinkpad</b>  ·  1.3.0");
+    gtk_label_set_markup(GTK_LABEL(name), "<b>Blinkpad</b>  ·  1.4.0");
     gtk_widget_set_halign(name, GTK_ALIGN_START);
     gtk_box_pack_start(GTK_BOX(aboutwrap), name, FALSE, FALSE, 0);
     GtkWidget *desc = gtk_label_new("Native C / GTK3 control for monochrome ThinkPad LEDs.");
@@ -655,6 +656,52 @@ static GtkWidget *build_settings(void) {
 }
 
 /* ---------- lifecycle ---------- */
+
+static gboolean background_active(void) {
+    if (daemon_running) return TRUE;
+    if (current_engine && pattern_running(current_engine)) return TRUE;
+    return FALSE;
+}
+
+static void tray_show_window(void) {
+    gtk_widget_show(window);
+    gtk_window_deiconify(GTK_WINDOW(window));
+    gtk_window_present(GTK_WINDOW(window));
+}
+
+static void tray_quit_app(void) {
+    gtk_widget_destroy(window);
+}
+
+/* Closing keeps Blinkpad alive in the tray while lights are being animated. */
+static gboolean on_delete_event(GtkWidget *w, GdkEvent *e, gpointer d) {
+    (void)w; (void)e; (void)d;
+    if (background_active() && tray_ensure()) {
+        gtk_widget_hide(window);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+/* Minimising also hides to the tray while something is running. */
+static gboolean on_window_state_event(GtkWidget *w, GdkEventWindowState *e, gpointer d) {
+    (void)w; (void)d;
+    if ((e->new_window_state & GDK_WINDOW_STATE_ICONIFIED) &&
+        background_active() && tray_ensure()) {
+        gtk_widget_hide(window);
+    }
+    return FALSE;
+}
+
+/* Custom minimise button: Wayland compositors do not tell clients that a
+   window was minimised, so hiding to the tray needs its own button. */
+static void on_minimize_clicked(GtkWidget *w, gpointer d) {
+    (void)w; (void)d;
+    if (background_active() && tray_ensure())
+        gtk_widget_hide(window);
+    else
+        gtk_window_iconify(GTK_WINDOW(window));
+}
 
 static void on_destroy(GtkWidget *w, gpointer d) {
     if (current_engine) {
@@ -755,8 +802,11 @@ int main(int argc, char **argv) {
 
     /* Resolve the theme as dark before building any widgets. */
     GtkSettings *settings = gtk_settings_get_default();
-    if (settings)
+    if (settings) {
         g_object_set(settings, "gtk-application-prefer-dark-theme", TRUE, NULL);
+        /* Replace the stock minimise button with our own tray-aware one. */
+        g_object_set(settings, "gtk-decoration-layout", ":maximize,close", NULL);
+    }
 
     discover_leds();
     for (int i = 0; i < nleds; i++) {
@@ -776,6 +826,15 @@ int main(int argc, char **argv) {
     GtkWidget *brand = gtk_label_new(NULL);
     gtk_label_set_markup(GTK_LABEL(brand), "<b>Blinkpad</b>");
     gtk_header_bar_pack_start(GTK_HEADER_BAR(header), brand);
+
+    GtkWidget *minbtn = gtk_button_new_from_icon_name("window-minimize-symbolic",
+                                                      GTK_ICON_SIZE_BUTTON);
+    add_class(minbtn, "flat");
+    gtk_widget_set_tooltip_text(minbtn,
+        "Minimize — hides to the tray while a pattern or the notification daemon is running");
+    g_signal_connect(minbtn, "clicked", G_CALLBACK(on_minimize_clicked), NULL);
+    gtk_header_bar_pack_end(GTK_HEADER_BAR(header), minbtn);
+
     gtk_window_set_titlebar(GTK_WINDOW(window), header);
     gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
 
@@ -784,6 +843,9 @@ int main(int argc, char **argv) {
     hints.min_height = 440;
     gtk_window_set_geometry_hints(GTK_WINDOW(window), NULL, &hints, GDK_HINT_MIN_SIZE);
     g_signal_connect(window, "destroy", G_CALLBACK(on_destroy), NULL);
+    g_signal_connect(window, "delete-event", G_CALLBACK(on_delete_event), NULL);
+    g_signal_connect(window, "window-state-event", G_CALLBACK(on_window_state_event), NULL);
+    tray_init(window, tray_show_window, tray_quit_app);
 
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_container_add(GTK_CONTAINER(window), vbox);
@@ -840,11 +902,6 @@ int main(int argc, char **argv) {
     g_object_unref(provider);
 
     gtk_widget_show_all(window);
-
-    const char *start_page = getenv("BLINKPAD_PAGE");
-    if (start_page)
-        gtk_stack_set_visible_child_name(GTK_STACK(stack), start_page);
-
     gtk_main();
     return 0;
 }
