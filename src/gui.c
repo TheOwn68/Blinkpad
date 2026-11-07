@@ -832,7 +832,7 @@ static GtkWidget *build_settings(void) {
     gtk_widget_set_margin_top(aboutwrap, 12); gtk_widget_set_margin_bottom(aboutwrap, 12);
     gtk_box_pack_start(GTK_BOX(aboutwrap), section_label("ABOUT"), FALSE, FALSE, 0);
     GtkWidget *name = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(name), "<b>Blinkpad</b>  ·  1.5.0");
+    gtk_label_set_markup(GTK_LABEL(name), "<b>Blinkpad</b>  ·  1.3.0");
     gtk_widget_set_halign(name, GTK_ALIGN_START);
     gtk_box_pack_start(GTK_BOX(aboutwrap), name, FALSE, FALSE, 0);
     GtkWidget *desc = gtk_label_new("Native C / GTK3 control for monochrome ThinkPad LEDs.");
